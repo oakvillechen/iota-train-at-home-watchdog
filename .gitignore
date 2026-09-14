@@ -9,3 +9,9 @@ __pycache__/
 watchdog_config.json
 .vscode/
 .idea/
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+*.zip

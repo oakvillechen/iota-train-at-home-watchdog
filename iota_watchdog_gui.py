@@ -139,6 +139,15 @@ class IotaWatchdogApp:
         self.root.geometry("980x980")
         self.root.minsize(800, 800)
 
+        # 尝试加载自定义图标
+        try:
+            icon_p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+            if os.path.exists(icon_p):
+                self._app_icon = tk.PhotoImage(file=icon_p)
+                self.root.iconphoto(True, self._app_icon)
+        except Exception:
+            pass
+
         self.config = load_config()
         self.dark_mode = self.config.get("dark_mode", True)
         self.log_font_size = self.config.get("log_font_size", 12)

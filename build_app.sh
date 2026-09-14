@@ -10,8 +10,12 @@ if ! python3 -m PyInstaller --version >/dev/null 2>&1; then
     pip3 install pyinstaller
 fi
 
-echo "Packaging IOTA Watchdog.app..."
-python3 -m PyInstaller --noconfirm --onedir --windowed --name "IOTA Watchdog" iota_watchdog_gui.py
+echo "Packaging IOTA Watchdog.app with custom icon..."
+python3 -m PyInstaller --noconfirm --onedir --windowed \
+    --name "IOTA Watchdog" \
+    --icon "AppIcon.icns" \
+    --add-data "icon.png:." \
+    iota_watchdog_gui.py
 
 echo "Creating Zip bundle..."
 cd dist

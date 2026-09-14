@@ -11,10 +11,11 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
 
-CONFIG_FILE = os.path.expanduser("~/Library/Logs/IOTA Train at Home/watchdog_config.json")
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
+CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
-APP_PATH = "/Applications/IOTA Train at Home.app"
+SYS_APP_PATH = "/Applications/IOTA Train at Home.app"
+USER_APP_PATH = os.path.expanduser("~/Applications/IOTA Train at Home.app")
 
 DEFAULT_CONFIG = {
     "max_stale_minutes": 10,
@@ -498,8 +499,10 @@ class IotaWatchdogApp:
             time.sleep(1.5)
 
             # 4. 重新拉起应用
-            if os.path.exists(APP_PATH):
-                subprocess.run(["open", APP_PATH])
+            if os.path.exists(SYS_APP_PATH):
+                subprocess.run(["open", SYS_APP_PATH])
+            elif os.path.exists(USER_APP_PATH):
+                subprocess.run(["open", USER_APP_PATH])
             else:
                 subprocess.run(["open", "-a", APP_NAME])
 
@@ -549,8 +552,10 @@ class IotaWatchdogApp:
             time.sleep(2)
             self.root.after(0, lambda: self.btn_restart.config(text="🚀 正在重新拉起应用..."))
 
-            if os.path.exists(APP_PATH):
-                subprocess.run(["open", APP_PATH])
+            if os.path.exists(SYS_APP_PATH):
+                subprocess.run(["open", SYS_APP_PATH])
+            elif os.path.exists(USER_APP_PATH):
+                subprocess.run(["open", USER_APP_PATH])
             else:
                 subprocess.run(["open", "-a", APP_NAME])
 

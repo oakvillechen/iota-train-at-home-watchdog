@@ -26,7 +26,8 @@ DEFAULT_CONFIG = {
     "auto_scroll": True,
     "dark_mode": True,
     "caffeinate_enabled": True,
-    "log_font_size": 12
+    "log_font_size": 12,
+    "log_retention_days": 2
 }
 
 # 忽略的高频底层网络心跳日志（避免刷屏）
@@ -110,6 +111,14 @@ def save_config(cfg):
     except Exception as e:
         print(f"Error saving config: {e}")
 
+def format_size(size_bytes):
+    """将字节数格式化为人类可读的字符串"""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
 class ModernButton(tk.Label):
     def __init__(self, parent, text, command=None, bg_color="#2d3d54", fg_color="#f8fafc", hover_bg="#3b506e", font=("Helvetica", 11, "bold"), padx=12, pady=5, **kwargs):
         super().__init__(parent, text=text, bg=bg_color, fg=fg_color, font=font, padx=padx, pady=pady, relief="solid", bd=1, cursor="pointinghand", **kwargs)
@@ -151,7 +160,9 @@ class IotaWatchdogApp:
         self.config = load_config()
         self.dark_mode = self.config.get("dark_mode", True)
         self.log_font_size = self.config.get("log_font_size", 12)
+        self.log_retention_days = self.config.get("log_retention_days", 2)
         self.caffeinate_proc = None
+        self.last_log_cleanup_time = 0
         self.is_restarting = False
 
         self.is_monitoring = self.config.get("auto_watchdog_enabled", True)
@@ -195,6 +206,9 @@ class IotaWatchdogApp:
 
         if self.caffeinate_var.get():
             self.start_caffeinate()
+
+        # 启动时先清理一次过期日志
+        threading.Thread(target=self.cleanup_old_logs, daemon=True).start()
 
         # 扫描历史测速与初始状态
         self.load_initial_stats()
@@ -326,6 +340,42 @@ class IotaWatchdogApp:
                 pass
             self.caffeinate_proc = None
             self.append_watchdog_log("💤 [防休眠已关闭] 恢复系统默认休眠。")
+
+    def cleanup_old_logs(self):
+        """清理超过保留天数的过期日志文件"""
+        try:
+            retention_days = self.config.get("log_retention_days", 2)
+            cutoff_time = time.time() - (retention_days * 86400)
+            today_str = datetime.now().strftime("%Y-%m-%d")
+
+            all_logs = glob.glob(os.path.join(LOG_DIR, "*.log"))
+            deleted_count = 0
+            freed_bytes = 0
+
+            for log_path in all_logs:
+                basename = os.path.basename(log_path)
+                # 跳过今天的日志
+                if basename.startswith(today_str):
+                    continue
+                try:
+                    mtime = os.path.getmtime(log_path)
+                    fsize = os.path.getsize(log_path)
+                    if mtime < cutoff_time:
+                        os.remove(log_path)
+                        deleted_count += 1
+                        freed_bytes += fsize
+                        self.append_watchdog_log(f"🗑️ [自动清理] 删除过期日志: {basename} ({format_size(fsize)})")
+                except Exception as e:
+                    self.append_watchdog_log(f"⚠️ [自动清理] 删除失败 {basename}: {e}")
+
+            self.last_log_cleanup_time = time.time()
+
+            if deleted_count > 0:
+                self.append_watchdog_log(f"✅ [自动清理完成] 共删除 {deleted_count} 个过期日志，释放 {format_size(freed_bytes)} 空间")
+            else:
+                self.append_watchdog_log(f"🧹 [自动清理] 暂无过期日志需要清理 (保留最近 {retention_days} 天)")
+        except Exception as e:
+            self.append_watchdog_log(f"❌ [自动清理异常] {e}")
 
     def toggle_caffeinate(self):
         enabled = self.caffeinate_var.get()
@@ -777,6 +827,15 @@ class IotaWatchdogApp:
         self.entry_cooldown.pack(side=tk.LEFT, padx=(0, 14), ipady=2)
         self.widgets["entry_cooldown"] = self.entry_cooldown
 
+        lbl_c4 = tk.Label(cfg_frame, text="日志保留 (天):", font=("Helvetica", 11, "bold"))
+        lbl_c4.pack(side=tk.LEFT, padx=(0, 4))
+        self.widgets["cfg_lbl_c4"] = lbl_c4
+
+        self.entry_retention = tk.Entry(cfg_frame, width=5, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_retention.insert(0, str(self.config.get("log_retention_days", 2)))
+        self.entry_retention.pack(side=tk.LEFT, padx=(0, 14), ipady=2)
+        self.widgets["entry_retention"] = self.entry_retention
+
         self.btn_save = ModernButton(cfg_frame, text="💾 保存并应用参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 11, "bold"), padx=10, pady=3)
         self.btn_save.pack(side=tk.LEFT)
 
@@ -1007,8 +1066,10 @@ class IotaWatchdogApp:
         try:
             self.config["max_stale_minutes"] = max(2, int(self.entry_max_stale.get().strip()))
             self.config["cooldown_minutes"] = max(1, int(self.entry_cooldown.get().strip()))
+            self.config["log_retention_days"] = max(1, int(self.entry_retention.get().strip()))
+            self.log_retention_days = self.config["log_retention_days"]
             save_config(self.config)
-            self.append_watchdog_log(f"✅ 参数已保存: 无日志假死判定 {self.config['max_stale_minutes']}分 | 重启冷却 {self.config['cooldown_minutes']}分")
+            self.append_watchdog_log(f"✅ 参数已保存: 假死判定 {self.config['max_stale_minutes']}分 | 冷却 {self.config['cooldown_minutes']}分 | 日志保留 {self.config['log_retention_days']}天")
             messagebox.showinfo("成功", "配置已成功保存！")
         except ValueError:
             messagebox.showerror("错误", "请输入有效的正整数！")
@@ -1096,6 +1157,9 @@ class IotaWatchdogApp:
     def monitor_loop(self):
         while self.running:
             try:
+                # 每 6 小时执行一次过期日志清理
+                if time.time() - self.last_log_cleanup_time > 6 * 3600:
+                    threading.Thread(target=self.cleanup_old_logs, daemon=True).start()
                 now_ts = time.time()
                 proc_running, proc_text = self.check_process()
 

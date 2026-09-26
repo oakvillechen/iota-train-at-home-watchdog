@@ -8,8 +8,14 @@ import re
 import json
 import threading
 from datetime import datetime
-import tkinter as tk
-from tkinter import messagebox, scrolledtext
+try:
+    import tkinter as tk
+    from tkinter import messagebox, scrolledtext
+except ModuleNotFoundError:
+    for alt_py in ["/usr/local/bin/python3", "/usr/bin/python3"]:
+        if os.path.exists(alt_py):
+            os.execv(alt_py, [alt_py] + sys.argv)
+    raise
 
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
@@ -27,7 +33,9 @@ DEFAULT_CONFIG = {
     "dark_mode": True,
     "caffeinate_enabled": True,
     "log_font_size": 12,
-    "log_retention_days": 2
+    "log_retention_days": 2,
+    "last_upload_speed": "",
+    "last_download_speed": ""
 }
 
 # 忽略的高频底层网络心跳日志（避免刷屏）
@@ -51,6 +59,7 @@ KEY_LOG_KEYWORDS = [
     "FORWARD complete", "BACKWARD complete", "Forward pass", "Backward pass",
     "Downloaded activation", "Peer status dict has", "Broadcast peer status",
     "all_layers_training", "activation_queue", "select_by_capacity", "report_loss",
+    "Failed to send", "Peer unreachable", "unreachable", "dropping",
     "submit_activation", "submit_weights", "position", "queued", "queue_id",
     "/miner/register/status"
 ]
@@ -145,8 +154,8 @@ class IotaWatchdogApp:
     def __init__(self, root):
         self.root = root
         self.root.title("IOTA Train at Home 智能监控控制台")
-        self.root.geometry("980x980")
-        self.root.minsize(800, 800)
+        self.root.geometry("1020x1020")
+        self.root.minsize(850, 850)
 
         # 尝试加载自定义图标
         try:
@@ -183,11 +192,20 @@ class IotaWatchdogApp:
         self.current_epoch = "检测中..."
         self.current_phase = "检测中..."
         self.last_status = "检测中..."
-        self.last_upload_speed = "检测中..."
-        self.last_download_speed = "检测中..."
+        self.last_upload_speed = self.config.get("last_upload_speed") or "检测中..."
+        self.last_download_speed = self.config.get("last_download_speed") or "检测中..."
         self.active_peers_count = "检测中..."
         self.peer_mesh_status = "检测中..."
         self.all_layers_ready = "未知"
+        
+        # P2P 广播与激活丢弃告警监测
+        self.p2p_recent_drops = []
+        self.p2p_total_drops = 0
+        self.p2p_last_unreachable = 0
+        self.p2p_last_total_peers = 0
+        self.p2p_last_ok_peers = 0
+        self.p2p_health_level = "GREEN"
+        self.last_payout_fetch_time = 0
         
         self.queue_start_time = None
         self.prev_queue_position = None
@@ -201,26 +219,52 @@ class IotaWatchdogApp:
 
         self.widgets = {}
 
+        # 启动时立即尝试提取 Hotkey / Coldkey
+        self.extract_process_info()
+
         self.setup_ui()
         self.apply_theme()
 
         if self.caffeinate_var.get():
             self.start_caffeinate()
 
-        # 启动时先清理一次过期日志
-        threading.Thread(target=self.cleanup_old_logs, daemon=True).start()
-
-        # 扫描历史测速与初始状态
-        self.load_initial_stats()
-
         self.running = True
-        self.monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
-        self.monitor_thread.start()
+        self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
 
+        # macOS: 修复最小化后点击 Dock 图标无法恢复窗口的问题
+        self.root.bind("<Activate>", self._on_activate)
+        self.root.createcommand("::tk::mac::ReopenApplication", self._on_reopen)
+
+        # 延迟到 mainloop 启动后再执行后台线程，避免 macOS Tkinter 报 main thread is not in main loop
+        self.root.after(100, self.start_background_tasks)
+
+    def _on_activate(self, event=None):
+        """macOS: 窗口被激活时确保从最小化状态恢复"""
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
+
+    def _on_reopen(self):
+        """macOS: 点击 Dock 图标时恢复窗口（::tk::mac::ReopenApplication）"""
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
+
+    def start_background_tasks(self):
+        self.append_watchdog_log("🚀 IOTA Train at Home 智能监控控制台已就绪，正在同步运行状态与日志流...")
+        self.load_initial_stats()
+        threading.Thread(target=self.cleanup_old_logs, daemon=True).start()
         self.stream_thread = threading.Thread(target=self.log_stream_loop, daemon=True)
         self.stream_thread.start()
-
-        self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
+        self.monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
+        self.monitor_thread.start()
+        self.root.after(500, lambda: self.trigger_fetch_payout(manual=False))
 
     def get_queue_status_text(self, wait_mins=0.0):
         if self.last_queue_position is None:
@@ -255,6 +299,9 @@ class IotaWatchdogApp:
                         if up is not None and down is not None:
                             self.last_upload_speed = f"{up:.1f} Mbps"
                             self.last_download_speed = f"{down:.1f} Mbps"
+                            self.config["last_upload_speed"] = self.last_upload_speed
+                            self.config["last_download_speed"] = self.last_download_speed
+                            save_config(self.config)
                             self.update_speed_ui()
                     
                     # 活跃邻居
@@ -263,9 +310,22 @@ class IotaWatchdogApp:
                         self.active_peers_count = f"{peer_matches[-1].group(1)} 个"
 
                     # 广播网格联通
-                    bc_matches = list(re.finditer(r"Broadcast peer status:\s*(\d+/\d+)\s*ok", content))
+                    bc_matches = list(re.finditer(r"Broadcast peer status:\s*(\d+)/(\d+)\s*ok", content))
                     if bc_matches:
-                        self.peer_mesh_status = f"{bc_matches[-1].group(1)} 在线"
+                        ok = int(bc_matches[-1].group(1))
+                        tot = int(bc_matches[-1].group(2))
+                        self.p2p_last_ok_peers = ok
+                        self.p2p_last_total_peers = tot
+                        self.p2p_last_unreachable = max(0, tot - ok)
+                        self.peer_mesh_status = f"{ok}/{tot} 在线"
+
+                    # 扫描丢弃 Forward 激活
+                    drop_matches = list(re.finditer(r"(Failed to send forward activation|Peer unreachable for forward activation)", content))
+                    if drop_matches:
+                        self.p2p_total_drops = len(drop_matches)
+                        now_ts = time.time()
+                        self.p2p_recent_drops = [now_ts] * min(len(drop_matches), 15)
+                    self.update_p2p_health_ui()
 
                     # All layers training
                     all_matches = list(re.finditer(r"request to /miner/all_layers_training;\s*response:\s*(True|False)", content))
@@ -314,6 +374,169 @@ class IotaWatchdogApp:
                 self.lbl_speed_info.config(text=f"最近测速网速: ⬆ 上传 {self.last_upload_speed}  (⬇ 下载 {self.last_download_speed})", fg="#0284c7" if not self.dark_mode else "#38bdf8")
         self.root.after(0, _update)
 
+    def update_p2p_health_ui(self):
+        now = time.time()
+        self.p2p_recent_drops = [t for t in self.p2p_recent_drops if now - t <= 600]
+        recent_drop_count = len(self.p2p_recent_drops)
+        unreachable = self.p2p_last_unreachable
+        total_peers = self.p2p_last_total_peers
+
+        # 判定告警级别：红色(严重) / 黄色(异常) / 绿色(良好)
+        is_red = (
+            recent_drop_count >= 15 or 
+            (total_peers >= 6 and unreachable >= 8) or 
+            (total_peers >= 10 and (unreachable / total_peers) >= 0.5)
+        )
+        is_yellow = (
+            recent_drop_count >= 5 or 
+            unreachable >= 3 or 
+            (total_peers >= 10 and (unreachable / total_peers) >= 0.2)
+        )
+
+        if is_red:
+            new_level = "RED"
+            text = f"P2P传输与广播健康: 🔴 严重告警 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 算力丢弃中!"
+            fg_color = "#dc2626" if not self.dark_mode else "#f87171"
+        elif is_yellow:
+            new_level = "YELLOW"
+            text = f"P2P传输与广播健康: 🟡 传输异常 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 存在超时丢包"
+            fg_color = "#d97706" if not self.dark_mode else "#fbbf24"
+        else:
+            new_level = "GREEN"
+            text = f"P2P传输与广播健康: 🟢 良好稳定 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers})"
+            fg_color = "#15803d" if not self.dark_mode else "#4ade80"
+
+        if new_level != self.p2p_health_level:
+            old_level = self.p2p_health_level
+            self.p2p_health_level = new_level
+            if new_level == "RED":
+                self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 [P2P网络严重告警] 激活张量大量丢弃({recent_drop_count}次)或广播不可达({unreachable}/{total_peers})，已严重影响挖矿有效产出！\n", "ERROR")
+            elif new_level == "YELLOW" and old_level == "GREEN":
+                self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ [P2P网络轻度异常] 检测到 {unreachable} 个节点不可达或发生转发超时，请注意观察网络延迟。\n", "WARN")
+            elif new_level == "GREEN" and old_level in ["YELLOW", "RED"]:
+                self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 [P2P网络恢复良好] 传输通道已恢复正常稳定。\n", "TRAINING")
+
+        def _do_update():
+            if hasattr(self, "lbl_p2p_health"):
+                self.lbl_p2p_health.config(text=text, fg=fg_color)
+        self.root.after(0, _do_update)
+
+    def trigger_fetch_payout(self, manual=False):
+        if manual and hasattr(self, "lbl_payout_totals"):
+            self.lbl_payout_totals.config(text="正在刷新官方结算数据...")
+        threading.Thread(target=self._fetch_payout_worker, args=(manual,), daemon=True).start()
+
+    def _fetch_payout_worker(self, manual=False):
+        if not self.miner_hotkey or self.miner_hotkey == "检测中...":
+            hk_file = os.path.expanduser("~/.bittensor/wallets/iota/hotkeys/iota_miner")
+            if os.path.exists(hk_file):
+                try:
+                    with open(hk_file, "r") as f:
+                        hk_data = json.load(f)
+                        if "ss58Address" in hk_data:
+                            self.miner_hotkey = hk_data["ss58Address"]
+                            self.update_miner_info_ui()
+                except Exception:
+                    pass
+
+        if not self.miner_hotkey or self.miner_hotkey == "检测中...":
+            if manual:
+                self.root.after(0, lambda: messagebox.showwarning("提示", "未检测到有效的 Miner Hotkey，暂无法查询结算数据！"))
+            return
+
+        hotkey = self.miner_hotkey
+        base = "https://iota-web.api.macrocosmos.ai/mainnet"
+        import urllib.request, gzip, ssl
+
+        try:
+            ctx = ssl._create_unverified_context()
+        except Exception:
+            ctx = None
+
+        def _get_json(url):
+            req = urllib.request.Request(url, headers={"User-Agent": "iota-train-at-home-1.1.0", "Accept-Encoding": "gzip"})
+            kwargs = {"timeout": 8}
+            if ctx:
+                kwargs["context"] = ctx
+            with urllib.request.urlopen(req, **kwargs) as resp:
+                raw = resp.read()
+                if raw[:2] == b"\x1f\x8b":
+                    raw = gzip.decompress(raw)
+                return json.loads(raw.decode("utf-8"))
+
+        try:
+            totals = _get_json(f"{base}/v1/entitlements/totals/hotkey/{hotkey}")
+            history = _get_json(f"{base}/v1/entitlements/history/hotkey/{hotkey}")
+            
+            earned = totals.get("total_amount_earned", 0.0)
+            paid = totals.get("total_amount_paid", 0.0)
+            pending = totals.get("total_amount_pending", 0.0)
+            min_pay = totals.get("minimum_payout_amount", 0.4)
+
+            amounts = history.get("alpha_amounts", [])
+            timestamps = history.get("timestamps", [])
+            statuses = history.get("statuses", [])
+
+            payout_lines = []
+            if amounts and timestamps:
+                combined = list(zip(amounts, timestamps, statuses))
+                combined.reverse()
+                for amt, ts, st in combined[:5]:
+                    dt_str = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
+                    st_str = "已结算" if st == "settled" else st
+                    payout_lines.append(f"● {dt_str} EDT: {amt:.3f} Alpha ({st_str})")
+            else:
+                payout_lines.append("暂无历史结算发放记录")
+
+            run_id = self.current_run_id if (self.current_run_id and "检测中" not in self.current_run_id) else "4.12.16.14-tah"
+            clean_run = run_id.replace("run-", "").replace("_", ".")
+            token_url = f"{base}/miners/{hotkey}/runs/{clean_run}/tokens"
+            token_lines = []
+            try:
+                tokens_data = _get_json(token_url)
+                points = tokens_data.get("data_points", [])
+                daily_tokens = {}
+                for p in points:
+                    d = datetime.fromtimestamp(p["timestamp"]).strftime("%m-%d")
+                    daily_tokens[d] = max(daily_tokens.get(d, 0), p.get("token_count", 0))
+
+                sorted_days = sorted(daily_tokens.keys(), reverse=True)
+                all_sorted = sorted(daily_tokens.keys())
+                deltas = {}
+                prev_val = 0
+                for d in all_sorted:
+                    val = daily_tokens[d]
+                    deltas[d] = max(0, val - prev_val)
+                    prev_val = val
+
+                today_str = datetime.now().strftime("%m-%d")
+                for d in sorted_days[:4]:
+                    t_val = deltas.get(d, 0)
+                    t_wan = t_val / 10000.0
+                    tag_day = " (今日)" if d == today_str else ""
+                    if d == "09-24" or (t_wan < 20 and d != today_str):
+                        status_hint = " ⚠️ 产出不足0.4 Alpha未结"
+                    else:
+                        status_hint = " ✓ 正常贡献中" if d == today_str else " ✓ 已计入产出"
+                    token_lines.append(f"● {d}{tag_day}: {t_wan:6.2f} 万 Tokens{status_hint}")
+            except Exception:
+                token_lines.append("暂未获取到 Run Token 统计")
+
+            def _update_ui():
+                if hasattr(self, "lbl_payout_totals"):
+                    self.lbl_payout_totals.config(
+                        text=f"累计总赚取: {earned:.3f} Alpha | 已结算到账: {paid:.3f} Alpha | 待结转: {pending:.3f} Alpha (起付门槛 {min_pay} Alpha)"
+                    )
+                    self.lbl_daily_tokens.config(text="\n".join(token_lines))
+                    self.lbl_payout_history.config(text="\n".join(payout_lines))
+                    if manual:
+                        self.append_watchdog_log("📊 [收益账单] 官方结算数据与每日贡献量已刷新同步！")
+
+            self.root.after(0, _update_ui)
+        except Exception as e:
+            if manual:
+                self.root.after(0, lambda err=str(e): self.append_watchdog_log(f"⚠️ 刷新官方收益数据失败: {err}"))
+
     def change_font_size(self, delta):
         new_size = max(9, min(26, self.log_font_size + delta))
         if new_size != self.log_font_size:
@@ -326,7 +549,7 @@ class IotaWatchdogApp:
     def start_caffeinate(self):
         if self.caffeinate_proc is None or self.caffeinate_proc.poll() is not None:
             try:
-                self.caffeinate_proc = subprocess.Popen(["caffeinate", "-i", "-m", "-s"])
+                self.caffeinate_proc = subprocess.Popen(["caffeinate", "-i", "-m", "-s"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
                 self.append_watchdog_log("☕ [防休眠已开启] macOS 息屏后系统/网络/GPU将持续全速工作。")
             except Exception as e:
                 self.append_watchdog_log(f"⚠️ 开启防休眠失败: {e}")
@@ -421,6 +644,11 @@ class IotaWatchdogApp:
                     w.config(bg=t["bg_card"], fg=t["fg_text"])
                 elif name == "lbl_speed_info":
                     w.config(bg=t["bg_card"])
+                elif name == "lbl_p2p_health":
+                    w.config(bg=t["bg_card"])
+                elif name.startswith("lbl_payout_") or name in ["lbl_dt_title", "lbl_ph_title", "lbl_daily_tokens", "lbl_payout_history"]:
+                    bg_c = w.master.cget("bg") if hasattr(w, "master") else t["bg_card"]
+                    w.config(bg=bg_c, fg=t["fg_text"])
                 elif name == "lbl_font_display":
                     w.config(bg=t["bg_root"], fg=t["fg_text"])
                 elif name == "lbl_font_tag":
@@ -445,6 +673,9 @@ class IotaWatchdogApp:
         self.btn_restart.set_colors("#dc2626", "#ffffff", "#ef4444")
         self.btn_clean_reset.set_colors("#b45309", "#ffffff", "#d97706")
         self.btn_save.set_colors("#059669", "#ffffff", "#10b981")
+        if hasattr(self, "btn_refresh_payout"):
+            self.btn_refresh_payout.set_colors("#0284c7", "#ffffff", "#0369a1")
+        self.update_p2p_health_ui()
 
         self.txt_log.config(bg=t["log_bg"], fg=t["log_fg"], insertbackground=t["log_fg"], font=("Menlo", self.log_font_size))
 
@@ -757,7 +988,65 @@ class IotaWatchdogApp:
         self.lbl_speed_info.grid(row=3, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_speed_info"] = self.lbl_speed_info
 
-        # 4. 控制与工具栏
+        # P2P 广播与传输健康告警
+        self.lbl_p2p_health = tk.Label(grid_frame, text="P2P传输与广播健康: 🟢 良好稳定 (检测中...)", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
+        self.lbl_p2p_health.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 2))
+        self.widgets["lbl_p2p_health"] = self.lbl_p2p_health
+
+        # 4. 每日有效算力贡献与历史到账面板
+        payout_card = tk.LabelFrame(main_frame, text=" 📊 每日有效算力贡献与历史到账 (Subnet 9 链上结算) ", font=("Helvetica", 12, "bold"), padx=12, pady=8)
+        payout_card.pack(fill=tk.X, pady=(0, 10))
+        self.widgets["card_payout"] = payout_card
+
+        # 汇总数据栏
+        payout_top = tk.Frame(payout_card)
+        payout_top.pack(fill=tk.X, pady=(0, 6))
+        self.widgets["subcard_payout_top"] = payout_top
+
+        self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 Alpha | 已结算到账: 0.000 Alpha | 待结转: 0.000 Alpha (门槛 0.4)", font=("Helvetica", 11, "bold"), anchor="w")
+        self.lbl_payout_totals.pack(side=tk.LEFT)
+        self.widgets["lbl_payout_totals"] = self.lbl_payout_totals
+
+        self.btn_refresh_payout = ModernButton(payout_top, text="🔄 刷新收益", command=lambda: self.trigger_fetch_payout(manual=True), bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0369a1", font=("Helvetica", 10, "bold"), padx=8, pady=2)
+        self.btn_refresh_payout.pack(side=tk.RIGHT)
+
+        # 左右两栏：左侧每日有效 Token 贡献，右侧历史结算发放
+        payout_cols = tk.Frame(payout_card)
+        payout_cols.pack(fill=tk.X)
+        self.widgets["subcard_payout_cols"] = payout_cols
+
+        # 左侧：每日贡献量
+        left_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=6)
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.widgets["subcard_payout_left"] = left_col
+
+        lbl_dt_title = tk.Label(left_col, text="📈 近期每日有效 Token 贡献量:", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_dt_title.pack(fill=tk.X)
+        self.widgets["lbl_dt_title"] = lbl_dt_title
+
+        self.lbl_daily_tokens = tk.Label(left_col, text="正在同步官方数据...", font=("Menlo", 10), justify="left", anchor="w")
+        self.lbl_daily_tokens.pack(fill=tk.X, pady=(3, 0))
+        self.widgets["lbl_daily_tokens"] = self.lbl_daily_tokens
+
+        # 右侧：历史到账记录
+        right_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=6)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        self.widgets["subcard_payout_right"] = right_col
+
+        lbl_ph_title = tk.Label(right_col, text="💰 历史结算发放记录 (按日到账):", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_ph_title.pack(fill=tk.X)
+        self.widgets["lbl_ph_title"] = lbl_ph_title
+
+        self.lbl_payout_history = tk.Label(right_col, text="正在同步官方数据...", font=("Menlo", 10), justify="left", anchor="w")
+        self.lbl_payout_history.pack(fill=tk.X, pady=(3, 0))
+        self.widgets["lbl_payout_history"] = self.lbl_payout_history
+
+        # 下次结算提示
+        self.lbl_payout_next = tk.Label(payout_card, text="⏰ 结算说明: 官方每天 20:00 EDT (UTC 00:00) 统一发奖 | 达到 0.4 Alpha 自动转入 Coldkey，不足 0.4 自动滚存至次日", font=("Helvetica", 10), fg="#64748b", anchor="w")
+        self.lbl_payout_next.pack(fill=tk.X, pady=(6, 0))
+        self.widgets["lbl_payout_next"] = self.lbl_payout_next
+
+        # 5. 控制与工具栏
         ctrl_frame = tk.Frame(main_frame)
         ctrl_frame.pack(fill=tk.X, pady=(0, 8))
         self.widgets["ctrl_frame"] = ctrl_frame
@@ -931,6 +1220,9 @@ class IotaWatchdogApp:
                     if up is not None and down is not None:
                         self.last_upload_speed = f"{up:.1f} Mbps"
                         self.last_download_speed = f"{down:.1f} Mbps"
+                        self.config["last_upload_speed"] = self.last_upload_speed
+                        self.config["last_download_speed"] = self.last_download_speed
+                        save_config(self.config)
                         self.update_speed_ui()
             except Exception:
                 pass
@@ -960,9 +1252,22 @@ class IotaWatchdogApp:
 
         # 提取活跃邻居数与广播状态
         if "Broadcast peer status:" in line_clean:
-            m = re.search(r"Broadcast peer status:\s*(\d+/\d+)\s*ok", line_clean)
+            m = re.search(r"Broadcast peer status:\s*(\d+)/(\d+)\s*ok", line_clean)
             if m:
-                self.peer_mesh_status = f"{m.group(1)} 在线"
+                ok = int(m.group(1))
+                tot = int(m.group(2))
+                self.p2p_last_ok_peers = ok
+                self.p2p_last_total_peers = tot
+                self.p2p_last_unreachable = max(0, tot - ok)
+                self.peer_mesh_status = f"{ok}/{tot} 在线"
+                self.update_p2p_health_ui()
+
+        # 监测 Forward 激活丢弃与 P2P 超时
+        if "Failed to send forward activation" in line_clean or "Peer unreachable for forward activation" in line_clean:
+            now = time.time()
+            self.p2p_recent_drops.append(now)
+            self.p2p_total_drops += 1
+            self.update_p2p_health_ui()
 
         if "Peer status dict has" in line_clean:
             m = re.search(r"Peer status dict has (\d+) entries", line_clean)
@@ -1054,10 +1359,19 @@ class IotaWatchdogApp:
 
     def _insert_text(self, text, tag):
         def _do():
-            self.txt_log.insert(tk.END, text, tag)
-            if self.auto_scroll_var.get():
-                self.txt_log.see(tk.END)
-        self.root.after(0, _do)
+            try:
+                self.txt_log.insert(tk.END, text, tag)
+                if self.auto_scroll_var.get():
+                    self.txt_log.see(tk.END)
+            except Exception:
+                pass
+        try:
+            self.root.after(0, _do)
+        except Exception:
+            try:
+                _do()
+            except Exception:
+                pass
 
     def clear_ui_log(self):
         self.txt_log.delete("1.0", tk.END)
@@ -1096,14 +1410,24 @@ class IotaWatchdogApp:
 
     def extract_process_info(self):
         try:
+            hk_file = os.path.expanduser("~/.bittensor/wallets/iota/hotkeys/iota_miner")
+            if os.path.exists(hk_file):
+                try:
+                    with open(hk_file, "r") as f:
+                        hk_data = json.load(f)
+                        if "ss58Address" in hk_data:
+                            self.miner_hotkey = hk_data["ss58Address"]
+                except Exception:
+                    pass
+
             out = subprocess.check_output(["ps", "aux"]).decode()
             for line in out.splitlines():
                 if "main_pool:ai.macrocosmos.iota.tah.worker" in line:
                     coldkey_match = re.search(r"--payout-coldkey\s+([0-9A-Za-z]+)", line)
                     if coldkey_match:
                         self.payout_coldkey = coldkey_match.group(1)
-                        self.update_miner_info_ui()
                     break
+            self.update_miner_info_ui()
         except Exception:
             pass
 
@@ -1127,7 +1451,7 @@ class IotaWatchdogApp:
                         try:
                             with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:
                                 all_lines = f.readlines()
-                                initial_lines = all_lines[-60:]
+                                initial_lines = all_lines[-300:]
                                 for l in initial_lines:
                                     if not self.filter_key_logs.get() or self.is_key_event(l):
                                         self.classify_and_append(l)
@@ -1192,15 +1516,39 @@ class IotaWatchdogApp:
                 log_time_str = datetime.fromtimestamp(mtime).strftime("%H:%M:%S")
                 self.root.after(0, lambda s=stale_sec, t=log_time_str: self.lbl_log_time.config(text=f"最新日志心跳: {t} ({int(s)}秒前)"))
 
+                # 刷新 P2P 广播与传输健康状态
+                self.update_p2p_health_ui()
+
+                # 定期刷新官方收益账单与每日贡献量（每 5 分钟）
+                if now_ts - self.last_payout_fetch_time > 300:
+                    self.last_payout_fetch_time = now_ts
+                    self.trigger_fetch_payout(manual=False)
+
                 # 假死检测（无任何日志输出）
                 if stale_sec > self.config["max_stale_minutes"] * 60:
-                    self.root.after(0, lambda: self.lbl_node_phase.config(text="当前阶段: ❌ 日志超时无写入 (假死)", fg="#dc2626"))
-                    self.root.after(0, lambda: self.lbl_init_timer.config(text="排队状态: 🔴 进程假死无响应", fg="#dc2626"))
-                    if self.is_monitoring:
-                        self.append_watchdog_log(f"❌ 判定假死: 日志已超过 {int(stale_sec//60)} 分钟无任何输出，执行重启恢复！")
-                        self._do_restart(is_manual=False)
-                        time.sleep(self.config.get("check_interval_seconds", 15))
-                        continue
+                    # 排队保护：排队期间不自动重启，避免丢失队列位置
+                    is_in_queue = (self.last_queue_position is not None and 
+                                   self.last_queue_position > 0 and 
+                                   not self.is_actively_training and
+                                   proc_running)
+                    if is_in_queue:
+                        stale_mins = int(stale_sec // 60)
+                        pos = self.last_queue_position
+                        self.root.after(0, lambda m=stale_mins, p=pos: [
+                            self.lbl_node_phase.config(text=f"当前阶段: ⚠️ 日志 {m} 分钟无写入 (排队保护中)", fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                            self.lbl_init_timer.config(text=f"排队状态: 🛡️ 第 {p} 位 — 排队中跳过重启保护队列位置", fg="#d97706" if not self.dark_mode else "#fbbf24")
+                        ])
+                        # 每 10 分钟提醒一次，但不重启
+                        if stale_mins % 10 == 0:
+                            self.append_watchdog_log(f"🛡️ [排队保护] 日志已 {stale_mins} 分钟无写入，但当前排第 {pos} 位，跳过自动重启以保护队列位置")
+                    else:
+                        self.root.after(0, lambda: self.lbl_node_phase.config(text="当前阶段: ❌ 日志超时无写入 (假死)", fg="#dc2626"))
+                        self.root.after(0, lambda: self.lbl_init_timer.config(text="排队状态: 🔴 进程假死无响应", fg="#dc2626"))
+                        if self.is_monitoring:
+                            self.append_watchdog_log(f"❌ 判定假死: 日志已超过 {int(stale_sec//60)} 分钟无任何输出，执行重启恢复！")
+                            self._do_restart(is_manual=False)
+                            time.sleep(self.config.get("check_interval_seconds", 15))
+                            continue
 
                 try:
                     with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:

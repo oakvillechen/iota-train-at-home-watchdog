@@ -1,17 +1,4 @@
-# Logs & Caches
 *.log
+*.old.log
 __pycache__/
-*.py[cod]
-*$py.class
 .DS_Store
-
-# User configs & local state
-watchdog_config.json
-.vscode/
-.idea/
-
-# PyInstaller build artifacts
-build/
-dist/
-*.spec
-*.zip

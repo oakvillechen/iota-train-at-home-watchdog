@@ -1,0 +1,12 @@
+{
+  "max_stale_minutes": 30,
+  "cooldown_minutes": 3,
+  "check_interval_seconds": 15,
+  "auto_watchdog_enabled": true,
+  "filter_key_logs_only": true,
+  "auto_scroll": true,
+  "dark_mode": true,
+  "caffeinate_enabled": true,
+  "log_font_size": 12,
+  "log_retention_days": 2
+}

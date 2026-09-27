@@ -4,14 +4,17 @@ set -e
 cd "$(dirname "$0")"
 echo "=== 🔨 Building IOTA Watchdog macOS App ==="
 
-# Check PyInstaller
-if ! python3 -m PyInstaller --version >/dev/null 2>&1; then
-    echo "Installing PyInstaller..."
-    pip3 install pyinstaller
-fi
+# Select python interpreter with PyInstaller
+PY_BIN="python3"
+for py in /usr/local/bin/python3 /opt/homebrew/bin/python3 python3; do
+    if "$py" -m PyInstaller --version >/dev/null 2>&1; then
+        PY_BIN="$py"
+        break
+    fi
+done
 
-echo "Packaging IOTA Watchdog.app with custom icon..."
-python3 -m PyInstaller --noconfirm --onedir --windowed \
+echo "Packaging IOTA Watchdog.app with $PY_BIN..."
+"$PY_BIN" -m PyInstaller --noconfirm --onedir --windowed \
     --name "IOTA Watchdog" \
     --icon "AppIcon.icns" \
     --add-data "icon.png:." \

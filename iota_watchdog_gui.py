@@ -488,37 +488,116 @@ class IotaWatchdogApp:
             else:
                 payout_lines.append("暂无历史结算发放记录")
 
-            run_id = self.current_run_id if (self.current_run_id and "检测中" not in self.current_run_id) else "4.12.16.14-tah"
-            clean_run = run_id.replace("run-", "").replace("_", ".")
-            token_url = f"{base}/miners/{hotkey}/runs/{clean_run}/tokens"
+            # 聚合多 Run 计算最近 3 天及当天最近 3 小时有效 Token 贡献量
             token_lines = []
             try:
-                tokens_data = _get_json(token_url)
-                points = tokens_data.get("data_points", [])
-                daily_tokens = {}
-                for p in points:
-                    d = datetime.fromtimestamp(p["timestamp"]).strftime("%m-%d")
-                    daily_tokens[d] = max(daily_tokens.get(d, 0), p.get("token_count", 0))
+                cand_runs = []
+                if self.current_run_id and "检测中" not in self.current_run_id:
+                    cand_runs.append(self.current_run_id)
+                latest_log = self.get_latest_log()
+                if latest_log and os.path.exists(latest_log):
+                    try:
+                        with open(latest_log, "r", errors="ignore") as lf:
+                            for l in lf:
+                                for rm in re.finditer(r"4\.12\.16\.\d+-tah", l):
+                                    r_cand = rm.group(0)
+                                    if r_cand not in cand_runs:
+                                        cand_runs.append(r_cand)
+                    except Exception:
+                        pass
+                for fb in ["4.12.16.24-tah", "4.12.16.14-tah"]:
+                    if fb not in cand_runs:
+                        cand_runs.append(fb)
 
-                sorted_days = sorted(daily_tokens.keys(), reverse=True)
-                all_sorted = sorted(daily_tokens.keys())
-                deltas = {}
-                prev_val = 0
-                for d in all_sorted:
-                    val = daily_tokens[d]
-                    deltas[d] = max(0, val - prev_val)
-                    prev_val = val
+                now = datetime.now()
+                today_date = now.strftime("%Y-%m-%d")
 
-                today_str = datetime.now().strftime("%m-%d")
-                for d in sorted_days[:4]:
-                    t_val = deltas.get(d, 0)
-                    t_wan = t_val / 10000.0
-                    tag_day = " (今日)" if d == today_str else ""
-                    if d == "09-24" or (t_wan < 20 and d != today_str):
-                        status_hint = " ⚠️ 产出不足0.4 Alpha未结"
+                daily_deltas = {}
+                hourly_deltas = {}
+
+                def _fetch_run_pts(r_name):
+                    c_run = r_name.replace("run-", "").replace("_", ".")
+                    u = f"{base}/miners/{hotkey}/runs/{c_run}/tokens"
+                    try:
+                        res = _get_json(u)
+                        return r_name, res.get("data_points", [])
+                    except Exception:
+                        return r_name, []
+
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=min(4, len(cand_runs))) as ex:
+                    run_pts_map = dict(ex.map(_fetch_run_pts, cand_runs))
+
+                primary_run = cand_runs[0] if cand_runs else "4.12.16.24-tah"
+
+                for r_name, points in run_pts_map.items():
+                    if not points:
+                        continue
+                    pts = sorted(points, key=lambda x: x.get("timestamp", 0))
+
+                    by_day = {}
+                    for p in pts:
+                        d_str = datetime.fromtimestamp(p["timestamp"]).strftime("%Y-%m-%d")
+                        by_day.setdefault(d_str, []).append(p)
+
+                    sorted_days = sorted(by_day.keys())
+                    prev_max = 0
+                    for d_str in sorted_days:
+                        d_max = max(p.get("token_count", 0) for p in by_day[d_str])
+                        d_delta = max(0, d_max - prev_max)
+                        daily_deltas[d_str] = daily_deltas.get(d_str, 0) + d_delta
+                        prev_max = d_max
+
+                    # 当天最近每小时贡献（取包含今日数据的当前 Run）
+                    if today_date in by_day and (r_name == primary_run or not hourly_deltas):
+                        t_pts = by_day[today_date]
+                        from datetime import timedelta
+                        yest_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+                        yest_max = max((p.get("token_count", 0) for p in by_day[yest_date]), default=0) if yest_date in by_day else 0
+
+                        by_hour = {}
+                        for p in t_pts:
+                            h = datetime.fromtimestamp(p["timestamp"]).hour
+                            by_hour.setdefault(h, []).append(p.get("token_count", 0))
+
+                        prev_h_cum = yest_max
+                        for h in range(now.hour + 1):
+                            if h in by_hour:
+                                cur_h_cum = max(by_hour[h])
+                                hourly_deltas[h] = max(0, cur_h_cum - prev_h_cum)
+                                prev_h_cum = cur_h_cum
+                            else:
+                                hourly_deltas[h] = 0
+
+                # 格式化 UI 文本
+                token_lines.append("【当天最近 3 小时 (每小时)】")
+                for offset in [3, 2, 1]:
+                    th = now.hour - offset
+                    if th >= 0:
+                        h_val = hourly_deltas.get(th, 0)
+                        token_lines.append(f"● {th:02d}:00 - {th+1:02d}:00 : {h_val/10000:6.2f} 万 Tokens")
+                cur_h = now.hour
+                cur_val = hourly_deltas.get(cur_h, 0)
+                now_hm = now.strftime('%H:%M')
+                token_lines.append(f"● {cur_h:02d}:00 - {now_hm} : {cur_val/10000:6.2f} 万 Tokens (进行中)")
+
+                token_lines.append("")
+                token_lines.append("【最近 3 天贡献量对比】")
+                from datetime import timedelta
+                for i in range(3):
+                    dt = now - timedelta(days=i)
+                    d_key = dt.strftime("%Y-%m-%d")
+                    d_short = dt.strftime("%m-%d")
+                    val = daily_deltas.get(d_key, 0)
+                    t_wan = val / 10000.0
+                    tag = " (今日)" if i == 0 else ""
+                    if i == 0:
+                        hint = " ✓ 正常贡献中" if t_wan > 0 else " ⚠️ 暂无产出(连接排查)"
+                    elif t_wan < 20:
+                        hint = " ⚠️ 产出不足0.4 Alpha未结"
                     else:
-                        status_hint = " ✓ 正常贡献中" if d == today_str else " ✓ 已计入产出"
-                    token_lines.append(f"● {d}{tag_day}: {t_wan:6.2f} 万 Tokens{status_hint}")
+                        hint = " ✓ 已计入产出"
+                    token_lines.append(f"● {d_short}{tag:7}: {t_wan:6.2f} 万 Tokens{hint}")
             except Exception:
                 token_lines.append("暂未获取到 Run Token 统计")
 
@@ -1020,7 +1099,7 @@ class IotaWatchdogApp:
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         self.widgets["subcard_payout_left"] = left_col
 
-        lbl_dt_title = tk.Label(left_col, text="📈 近期每日有效 Token 贡献量:", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_dt_title = tk.Label(left_col, text="📈 有效 Token 贡献统计 (近3小时 / 近3天):", font=("Helvetica", 11, "bold"), anchor="w")
         lbl_dt_title.pack(fill=tk.X)
         self.widgets["lbl_dt_title"] = lbl_dt_title
 

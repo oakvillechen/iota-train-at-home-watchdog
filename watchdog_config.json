@@ -8,5 +8,7 @@
   "dark_mode": true,
   "caffeinate_enabled": true,
   "log_font_size": 12,
-  "log_retention_days": 2
+  "log_retention_days": 2,
+  "last_upload_speed": "",
+  "last_download_speed": ""
 }

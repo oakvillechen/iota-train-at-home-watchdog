@@ -2,3 +2,7 @@
 *.old.log
 __pycache__/
 .DS_Store
+build/
+dist/
+*.spec
+*.zip

@@ -18,7 +18,13 @@ jobs:
         run: /usr/bin/python3 -c "import tkinter; print('tkinter OK')"
 
       - name: Install PyInstaller
-        run: /usr/bin/python3 -m pip install --user pyinstaller
+        run: |
+          for py in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+            if [ -x "$py" ]; then
+              echo "== installing for $py"
+              "$py" -m pip install --user -q pyinstaller || "$py" -m pip install --user -q --break-system-packages pyinstaller
+            fi
+          done
 
       - name: Build
         run: bash build_app.sh

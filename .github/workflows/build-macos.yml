@@ -19,12 +19,13 @@ jobs:
 
       - name: Install PyInstaller
         run: |
-          for py in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
-            if [ -x "$py" ]; then
-              echo "== installing for $py"
-              "$py" -m pip install --user -q pyinstaller || "$py" -m pip install --user -q --break-system-packages pyinstaller
-            fi
+          PY_BIN="python3"
+          for py in /usr/local/bin/python3 /opt/homebrew/bin/python3 python3; do
+            if command -v "$py" >/dev/null 2>&1; then PY_BIN="$py"; break; fi
           done
+          echo "Build script will use: $PY_BIN"
+          "$PY_BIN" -m pip install --user -q pyinstaller || "$PY_BIN" -m pip install --user -q --break-system-packages pyinstaller
+          "$PY_BIN" -m PyInstaller --version
 
       - name: Build
         run: bash build_app.sh

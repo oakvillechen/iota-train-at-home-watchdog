@@ -5,3 +5,11 @@ __pycache__/
 build/
 dist/
 *.spec
+
+# Credentials & secrets
+.env*
+*.key
+*.pem
+*.cert
+credentials.json
+secrets.json

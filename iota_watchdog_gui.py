@@ -205,6 +205,9 @@ class IotaWatchdogApp:
         self.p2p_last_total_peers = 0
         self.p2p_last_ok_peers = 0
         self.p2p_health_level = "GREEN"
+        self.p2p_last_broadcast_time = 0
+        self.last_speedtest_time = ""
+        self.coldkey_visible = False
         self.last_payout_fetch_time = 0
         
         self.queue_start_time = None
@@ -290,6 +293,9 @@ class IotaWatchdogApp:
             try:
                 with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
+                    lines = content.splitlines()[-200:]
+                    now_ts = time.time()
+
                     # 测速
                     speed_matches = list(re.finditer(r"Speedtest completed with results:\s*(\{.*?\})", content))
                     if speed_matches:
@@ -302,6 +308,11 @@ class IotaWatchdogApp:
                             self.config["last_upload_speed"] = self.last_upload_speed
                             self.config["last_download_speed"] = self.last_download_speed
                             save_config(self.config)
+                            # 提取最近测速时间
+                            sp_start = max(0, speed_matches[-1].start() - 60)
+                            sp_m = re.search(r"\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2})", content[sp_start:speed_matches[-1].start()])
+                            if sp_m:
+                                self.last_speedtest_time = sp_m.group(1)
                             self.update_speed_ui()
                     
                     # 活跃邻居
@@ -312,66 +323,93 @@ class IotaWatchdogApp:
                     # 广播网格联通
                     bc_matches = list(re.finditer(r"Broadcast peer status:\s*(\d+)/(\d+)\s*ok", content))
                     if bc_matches:
-                        ok = int(bc_matches[-1].group(1))
-                        tot = int(bc_matches[-1].group(2))
+                        last_bc = bc_matches[-1]
+                        ok = int(last_bc.group(1))
+                        tot = int(last_bc.group(2))
                         self.p2p_last_ok_peers = ok
                         self.p2p_last_total_peers = tot
                         self.p2p_last_unreachable = max(0, tot - ok)
                         self.peer_mesh_status = f"{ok}/{tot} 在线"
+                        # 检查此条广播时间戳是否在最近 10 分钟内
+                        bc_start = max(0, last_bc.start() - 60)
+                        bc_ts_m = re.search(r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})", content[bc_start:last_bc.end()])
+                        if bc_ts_m:
+                            try:
+                                dt = datetime.strptime(bc_ts_m.group(1), "%Y-%m-%d %H:%M:%S")
+                                self.p2p_last_broadcast_time = dt.timestamp()
+                            except Exception:
+                                self.p2p_last_broadcast_time = 0
+                        else:
+                            self.p2p_last_broadcast_time = 0
 
-                    # 扫描丢弃 Forward 激活
+                    # 扫描丢弃 Forward 激活 (仅统计近 10 分钟)
                     drop_matches = list(re.finditer(r"(Failed to send forward activation|Peer unreachable for forward activation)", content))
                     if drop_matches:
                         self.p2p_total_drops = len(drop_matches)
-                        now_ts = time.time()
-                        self.p2p_recent_drops = [now_ts] * min(len(drop_matches), 15)
-                    self.update_p2p_health_ui()
+                        self.p2p_recent_drops = []
+                        for dm in drop_matches[-20:]:
+                            dm_start = max(0, dm.start() - 60)
+                            dm_ts_m = re.search(r"\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})", content[dm_start:dm.end()])
+                            if dm_ts_m:
+                                try:
+                                    dt = datetime.strptime(dm_ts_m.group(1), "%Y-%m-%d %H:%M:%S")
+                                    if now_ts - dt.timestamp() <= 600:
+                                        self.p2p_recent_drops.append(dt.timestamp())
+                                except Exception:
+                                    pass
 
                     # All layers training
                     all_matches = list(re.finditer(r"request to /miner/all_layers_training;\s*response:\s*(True|False)", content))
                     if all_matches:
                         self.all_layers_ready = "已就绪 (True)" if all_matches[-1].group(1) == "True" else "未就绪 (False)"
 
-                    # 提取排队位置历史
-                    pos_matches = list(re.finditer(r"['\"]position['\"]\s*:\s*([0-9]+)", content))
-                    if pos_matches:
-                        unique_positions = []
-                        for m in pos_matches:
-                            val = int(m.group(1))
-                            if not unique_positions or unique_positions[-1] != val:
-                                unique_positions.append(val)
-                        if len(unique_positions) >= 2:
-                            self.prev_queue_position = unique_positions[-2]
-                        self.last_queue_position = unique_positions[-1]
-                        self.root.after(0, lambda: [
-                            self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列排队中 ({self.current_layer})", fg="#d97706" if not self.dark_mode else "#fbbf24"),
-                            self.lbl_init_timer.config(text=self.get_queue_status_text(0.0), fg="#d97706" if not self.dark_mode else "#fbbf24")
-                        ])
-
                     # 计算 Forward / Backward 历史
                     fwd_matches = re.findall(r"FORWARD complete", content)
                     bwd_matches = re.findall(r"BACKWARD complete", content)
-                    if fwd_matches or bwd_matches:
-                        self.forward_count = len(fwd_matches)
-                        self.backward_count = len(bwd_matches)
+                    self.forward_count = len(fwd_matches)
+                    self.backward_count = len(bwd_matches)
+
+                    # 尾部状态解析：判定当前是排队中还是正式训练中
+                    tail_content = "\n".join(lines)
+                    pos_matches = list(re.finditer(r"['\"]position['\"]\s*:\s*([0-9]+)", tail_content))
+                    st_matches = list(re.finditer(r"['\"]status['\"]\s*:\s*['\"]([^'\"]+)['\"]", tail_content))
+
+                    latest_status = st_matches[-1].group(1) if st_matches else None
+                    if pos_matches:
+                        unique_positions = [int(m.group(1)) for m in pos_matches]
+                        if len(unique_positions) >= 2:
+                            self.prev_queue_position = unique_positions[-2]
+                        self.last_queue_position = unique_positions[-1]
+
+                    if latest_status == "queued" or (self.last_queue_position is not None and latest_status != "training"):
+                        self.last_status = "queued"
+                        self.is_actively_training = False
+                        self.queue_start_time = time.time()
+                        self.root.after(0, lambda: [
+                            self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列排队中 ({self.current_layer})", fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                            self.lbl_init_timer.config(text=self.get_queue_status_text(0.0), fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                            self.lbl_train_stats.config(
+                                text=f"训练计算统计: ⏳ 待机排队中 (累计历史 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次，等待入队就绪)" if self.forward_count > 0 else "训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)",
+                                fg="#64748b" if not self.dark_mode else "#94a3b8"
+                            )
+                        ])
+                    elif latest_status == "initializing":
+                        self.last_status = "initializing"
+                        self.is_actively_training = False
+                        self.queue_start_time = time.time()
+                    elif latest_status == "training" or (fwd_matches and not pos_matches):
+                        self.last_status = "training"
                         self.is_actively_training = True
 
-                    # 提取心跳
-                    hb_matches = list(re.finditer(r"response:\s*({.*?status.*?})", content))
-                    if hb_matches:
-                        latest_hb = hb_matches[-1].group(1)
-                        st_m = re.search(r"['\"]status['\"]\s*:\s*['\"]([^'\"]+)['\"]", latest_hb)
-                        if st_m:
-                            self.last_status = st_m.group(1)
-                            if self.last_status == "initializing":
-                                self.queue_start_time = time.time()
+                    self.update_p2p_health_ui()
             except Exception:
                 pass
 
     def update_speed_ui(self):
         def _update():
             if self.last_upload_speed != "检测中...":
-                self.lbl_speed_info.config(text=f"最近测速网速: ⬆ 上传 {self.last_upload_speed}  (⬇ 下载 {self.last_download_speed})", fg="#0284c7" if not self.dark_mode else "#38bdf8")
+                t_str = f" ({self.last_speedtest_time} 测得)" if getattr(self, "last_speedtest_time", "") else ""
+                self.lbl_speed_info.config(text=f"最近测速网速: ⬆ 上传 {self.last_upload_speed}  (⬇ 下载 {self.last_download_speed}){t_str}", fg="#0284c7" if not self.dark_mode else "#38bdf8")
         self.root.after(0, _update)
 
     def update_p2p_health_ui(self):
@@ -381,32 +419,43 @@ class IotaWatchdogApp:
         unreachable = self.p2p_last_unreachable
         total_peers = self.p2p_last_total_peers
 
-        # 判定告警级别：红色(严重) / 黄色(异常) / 绿色(良好)
-        is_red = (
-            recent_drop_count >= 15 or 
-            (total_peers >= 6 and unreachable >= 8) or 
-            (total_peers >= 10 and (unreachable / total_peers) >= 0.5)
-        )
-        is_yellow = (
-            recent_drop_count >= 5 or 
-            unreachable >= 3 or 
-            (total_peers >= 10 and (unreachable / total_peers) >= 0.2)
-        )
+        # 判断是否处于排队或握手等待状态（此时未入网格，不应报错）
+        is_in_queue = (self.last_status in ["queued", "initializing", "resetting"] or 
+                       (self.last_queue_position is not None and not self.is_actively_training))
+        is_bc_fresh = (now - getattr(self, "p2p_last_broadcast_time", 0)) <= 600
 
-        if is_red:
-            new_level = "RED"
-            text = f"P2P传输与广播健康: 🔴 严重告警 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 算力丢弃中!"
-            fg_color = "#dc2626" if not self.dark_mode else "#f87171"
-        elif is_yellow:
-            new_level = "YELLOW"
-            text = f"P2P传输与广播健康: 🟡 传输异常 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 存在超时丢包"
-            fg_color = "#d97706" if not self.dark_mode else "#fbbf24"
+        if is_in_queue:
+            new_level = "IDLE"
+            text = "P2P传输与广播健康: ⏸️ 队列排队中 (待入队后连入邻居网格)"
+            fg_color = "#64748b" if not self.dark_mode else "#94a3b8"
         else:
-            new_level = "GREEN"
-            text = f"P2P传输与广播健康: 🟢 良好稳定 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers})"
-            fg_color = "#15803d" if not self.dark_mode else "#4ade80"
+            # 仅在广播数据新鲜且确实处于工作状态时判定网格异常
+            is_red = (
+                recent_drop_count >= 15 or 
+                (is_bc_fresh and total_peers >= 6 and unreachable >= 8) or 
+                (is_bc_fresh and total_peers >= 10 and (unreachable / total_peers) >= 0.5)
+            )
+            is_yellow = (
+                recent_drop_count >= 5 or 
+                (is_bc_fresh and unreachable >= 3) or 
+                (is_bc_fresh and total_peers >= 10 and (unreachable / total_peers) >= 0.2)
+            )
 
-        if new_level != self.p2p_health_level:
+            if is_red:
+                new_level = "RED"
+                text = f"P2P传输与广播健康: 🔴 严重告警 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 算力丢弃中!"
+                fg_color = "#dc2626" if not self.dark_mode else "#f87171"
+            elif is_yellow:
+                new_level = "YELLOW"
+                text = f"P2P传输与广播健康: 🟡 传输异常 (近10分丢弃: {recent_drop_count}次 | 广播不可达: {unreachable}/{total_peers}) - 存在超时丢包"
+                fg_color = "#d97706" if not self.dark_mode else "#fbbf24"
+            else:
+                new_level = "GREEN"
+                bc_info = f" | 广播不可达: {unreachable}/{total_peers}" if is_bc_fresh and total_peers > 0 else ""
+                text = f"P2P传输与广播健康: 🟢 良好稳定 (近10分丢弃: {recent_drop_count}次{bc_info})"
+                fg_color = "#15803d" if not self.dark_mode else "#4ade80"
+
+        if new_level != self.p2p_health_level and new_level != "IDLE":
             old_level = self.p2p_health_level
             self.p2p_health_level = new_level
             if new_level == "RED":
@@ -415,6 +464,8 @@ class IotaWatchdogApp:
                 self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️ [P2P网络轻度异常] 检测到 {unreachable} 个节点不可达或发生转发超时，请注意观察网络延迟。\n", "WARN")
             elif new_level == "GREEN" and old_level in ["YELLOW", "RED"]:
                 self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] 🟢 [P2P网络恢复良好] 传输通道已恢复正常稳定。\n", "TRAINING")
+        elif new_level == "IDLE":
+            self.p2p_health_level = "IDLE"
 
         def _do_update():
             if hasattr(self, "lbl_p2p_health"):
@@ -628,7 +679,7 @@ class IotaWatchdogApp:
     def start_caffeinate(self):
         if self.caffeinate_proc is None or self.caffeinate_proc.poll() is not None:
             try:
-                self.caffeinate_proc = subprocess.Popen(["caffeinate", "-i", "-m", "-s"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+                self.caffeinate_proc = subprocess.Popen(["caffeinate", "-d", "-i", "-m", "-s"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
                 self.append_watchdog_log("☕ [防休眠已开启] macOS 息屏后系统/网络/GPU将持续全速工作。")
             except Exception as e:
                 self.append_watchdog_log(f"⚠️ 开启防休眠失败: {e}")
@@ -749,6 +800,8 @@ class IotaWatchdogApp:
         self.btn_font_inc.set_colors(t["btn_neutral_bg"], t["btn_neutral_fg"], t["btn_neutral_hover"])
         self.btn_copy_hk.set_colors("#2563eb", "#ffffff", "#3b82f6")
         self.btn_copy_ck.set_colors("#2563eb", "#ffffff", "#3b82f6")
+        if hasattr(self, "btn_toggle_ck"):
+            self.btn_toggle_ck.set_colors(t["btn_neutral_bg"], t["btn_neutral_fg"], t["btn_neutral_hover"])
         self.btn_restart.set_colors("#dc2626", "#ffffff", "#ef4444")
         self.btn_clean_reset.set_colors("#b45309", "#ffffff", "#d97706")
         self.btn_save.set_colors("#059669", "#ffffff", "#10b981")
@@ -757,6 +810,18 @@ class IotaWatchdogApp:
         self.update_p2p_health_ui()
 
         self.txt_log.config(bg=t["log_bg"], fg=t["log_fg"], insertbackground=t["log_fg"], font=("Menlo", self.log_font_size))
+
+    def toggle_coldkey_visibility(self):
+        self.coldkey_visible = not self.coldkey_visible
+        if self.coldkey_visible:
+            self.entry_coldkey.config(show="")
+            self.btn_toggle_ck.config(text="🙈 隐藏")
+        else:
+            if self.payout_coldkey and self.payout_coldkey != "检测中...":
+                self.entry_coldkey.config(show="*")
+            else:
+                self.entry_coldkey.config(show="")
+            self.btn_toggle_ck.config(text="👁️ 查看")
 
     def copy_to_clipboard(self, text, label_name):
         if not text or "检测中" in text:
@@ -1010,6 +1075,20 @@ class IotaWatchdogApp:
         self.btn_copy_ck = ModernButton(row2, text="📋 复制 Coldkey", command=lambda: self.copy_to_clipboard(self.payout_coldkey, "Payout Coldkey"), bg_color="#2563eb", fg_color="#ffffff", hover_bg="#3b82f6", font=("Helvetica", 11, "bold"), padx=10, pady=3)
         self.btn_copy_ck.pack(side=tk.RIGHT)
 
+        self.btn_toggle_ck = ModernButton(
+            row2,
+            text="👁️ 查看",
+            command=self.toggle_coldkey_visibility,
+            bg_color=THEMES["dark"]["btn_neutral_bg"] if self.dark_mode else THEMES["light"]["btn_neutral_bg"],
+            fg_color=THEMES["dark"]["btn_neutral_fg"] if self.dark_mode else THEMES["light"]["btn_neutral_fg"],
+            hover_bg=THEMES["dark"]["btn_neutral_hover"] if self.dark_mode else THEMES["light"]["btn_neutral_hover"],
+            font=("Helvetica", 11, "bold"),
+            padx=10,
+            pady=3
+        )
+        self.btn_toggle_ck.pack(side=tk.RIGHT, padx=(0, 6))
+        self.widgets["btn_toggle_ck"] = self.btn_toggle_ck
+
         row3 = tk.Frame(info_card)
         row3.pack(fill=tk.X, pady=(6, 0))
         self.widgets["subcard_row3"] = row3
@@ -1255,6 +1334,10 @@ class IotaWatchdogApp:
                 self.entry_coldkey.delete(0, tk.END)
                 self.entry_coldkey.insert(0, self.payout_coldkey)
                 self.entry_coldkey.config(state="readonly")
+                if not self.coldkey_visible:
+                    self.entry_coldkey.config(show="*")
+                else:
+                    self.entry_coldkey.config(show="")
 
             if self.current_layer and self.current_layer != "检测中...":
                 self.lbl_layer.config(text=f"连接 Layer: {self.current_layer}")
@@ -1299,6 +1382,7 @@ class IotaWatchdogApp:
                     if up is not None and down is not None:
                         self.last_upload_speed = f"{up:.1f} Mbps"
                         self.last_download_speed = f"{down:.1f} Mbps"
+                        self.last_speedtest_time = datetime.now().strftime("%H:%M")
                         self.config["last_upload_speed"] = self.last_upload_speed
                         self.config["last_download_speed"] = self.last_download_speed
                         save_config(self.config)
@@ -1306,8 +1390,15 @@ class IotaWatchdogApp:
             except Exception:
                 pass
 
+        # 捕获掉线重置与未注册状态
+        if "Miner not registered" in line_clean or "Resetting miner" in line_clean or "reset_miner_state" in line_clean:
+            self.is_actively_training = False
+            self.last_status = "queued"
+
         # 提取排队位置与注册队列状态 (例: 'status': 'queued', 'position': 1140)
         if "position" in line_clean and ("queued" in line_clean or "register" in line_clean or "status" in line_clean):
+            self.is_actively_training = False
+            self.last_status = "queued"
             pos_m = re.search(r"['\"]position['\"]\s*:\s*([0-9]+)", line_clean)
             if pos_m:
                 new_pos = int(pos_m.group(1))
@@ -1327,6 +1418,14 @@ class IotaWatchdogApp:
                 def _update_q(w=wait_mins):
                     self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列排队中 ({self.current_layer})", fg="#d97706" if not self.dark_mode else "#fbbf24")
                     self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24")
+                    if self.forward_count > 0:
+                        self.lbl_train_stats.config(
+                            text=f"训练计算统计: ⏳ 待机排队中 (累计历史 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次，等待入队就绪)",
+                            fg="#64748b" if not self.dark_mode else "#94a3b8"
+                        )
+                    else:
+                        self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8")
+                    self.update_p2p_health_ui()
                 self.root.after(0, _update_q)
 
         # 提取活跃邻居数与广播状态
@@ -1338,6 +1437,7 @@ class IotaWatchdogApp:
                 self.p2p_last_ok_peers = ok
                 self.p2p_last_total_peers = tot
                 self.p2p_last_unreachable = max(0, tot - ok)
+                self.p2p_last_broadcast_time = time.time()
                 self.peer_mesh_status = f"{ok}/{tot} 在线"
                 self.update_p2p_health_ui()
 
@@ -1635,62 +1735,98 @@ class IotaWatchdogApp:
                 except Exception:
                     lines = []
 
-                heartbeat_lines = []
-                hb_pattern = re.compile(r"response:\s*({.*?status.*?})")
-                for line in lines:
-                    m = hb_pattern.search(line)
-                    if m:
-                        heartbeat_lines.append(m.group(1))
+                # 从最近日志反向扫描提取最新状态与元数据（避免因单行日志截断导致丢失）
+                latest_status = None
+                latest_pos = None
+                latest_queue_id = None
+                latest_layer = None
+                latest_epoch = None
+                latest_run_id = None
+                latest_phase = None
 
-                if heartbeat_lines:
-                    latest_hb_str = heartbeat_lines[-1]
-                    try:
-                        run_id_m = re.search(r"['\"]run_id['\"]\s*:\s*['\"]([^'\"]+)['\"]", latest_hb_str)
-                        if run_id_m:
-                            self.current_run_id = run_id_m.group(1)
+                for line in reversed(lines):
+                    if not latest_status:
+                        st_m = re.search(r"['\"]status['\"]\s*:\s*['\"]([^'\"]+)['\"]", line)
+                        if st_m:
+                            latest_status = st_m.group(1)
+                    if latest_pos is None:
+                        p_m = re.search(r"['\"]position['\"]\s*:\s*([0-9]+)", line)
+                        if p_m:
+                            latest_pos = int(p_m.group(1))
+                    if not latest_queue_id:
+                        q_m = re.search(r"['\"]queue_id['\"]\s*:\s*['\"]([^'\"]+)['\"]", line)
+                        if q_m:
+                            latest_queue_id = q_m.group(1)
+                    if not latest_layer:
+                        l_m = re.search(r"['\"]layer['\"]\s*:\s*([0-9]+)", line)
+                        if l_m:
+                            latest_layer = f"Layer {l_m.group(1)}"
+                    if not latest_epoch:
+                        ep_m = re.search(r"['\"]epoch['\"]\s*:\s*([0-9]+)", line)
+                        if ep_m:
+                            latest_epoch = f"Epoch {ep_m.group(1)}"
+                    if not latest_run_id:
+                        r_m = re.search(r"['\"]run_id['\"]\s*:\s*['\"]([^'\"]+)['\"]", line)
+                        if r_m:
+                            latest_run_id = r_m.group(1)
+                    if not latest_phase:
+                        ph_m = re.search(r"['\"]phase['\"]\s*:\s*['\"]([^'\"]+)['\"]", line)
+                        if ph_m:
+                            latest_phase = ph_m.group(1)
 
-                        layer_m = re.search(r"['\"]layer['\"]\s*:\s*([0-9]+)", latest_hb_str)
-                        if layer_m:
-                            self.current_layer = f"Layer {layer_m.group(1)}"
+                if latest_layer:
+                    self.current_layer = latest_layer
+                if latest_epoch:
+                    self.current_epoch = latest_epoch
+                if latest_run_id:
+                    self.current_run_id = latest_run_id
+                if latest_phase:
+                    self.current_phase = latest_phase
+                if latest_pos is not None:
+                    if self.last_queue_position is not None and self.last_queue_position != latest_pos:
+                        self.prev_queue_position = self.last_queue_position
+                    self.last_queue_position = latest_pos
 
-                        epoch_m = re.search(r"['\"]epoch['\"]\s*:\s*([0-9]+)", latest_hb_str)
-                        if epoch_m:
-                            self.current_epoch = f"Epoch {epoch_m.group(1)}"
+                self.update_miner_info_ui()
+                mesh_str = f"P2P 网格: {self.peer_mesh_status}" if self.peer_mesh_status != "检测中..." else f"邻居 {self.active_peers_count}"
 
-                        phase_m = re.search(r"['\"]phase['\"]\s*:\s*['\"]([^'\"]+)['\"]", latest_hb_str)
-                        if phase_m:
-                            self.current_phase = phase_m.group(1)
-
-                        self.update_miner_info_ui()
-                    except Exception:
-                        pass
-
-                    # 计算排队等待时长
-                    mesh_str = f"P2P 网格: {self.peer_mesh_status}" if self.peer_mesh_status != "检测中..." else f"邻居 {self.active_peers_count}"
-
-                    if "'status': 'initializing'" in latest_hb_str or '"status": "initializing"' in latest_hb_str:
-                        if self.queue_start_time is None:
-                            self.queue_start_time = time.time()
-                        wait_mins = (time.time() - self.queue_start_time) / 60
-                        
-                        self.root.after(0, lambda m=mesh_str: self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列握手中 ({self.current_layer} | {m})", fg="#d97706" if not self.dark_mode else "#fbbf24"))
-                        self.root.after(0, lambda w=wait_mins: self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24"))
-                        
-                        if not self.is_actively_training:
-                            self.root.after(0, lambda: self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8"))
-                    else:
-                        # 正式进入训练
-                        self.queue_start_time = None
-                        self.root.after(0, lambda: self.lbl_node_phase.config(text=f"当前阶段: 🚀 正式训练中 ({self.current_layer} | {self.current_epoch})", fg="#15803d" if not self.dark_mode else "#4ade80"))
-                        self.root.after(0, lambda: self.lbl_init_timer.config(text="排队状态: 🔥 训练已正式开始 (已脱离排队，持续产出算力！)", fg="#15803d" if not self.dark_mode else "#4ade80"))
-                        self.root.after(0, lambda: self.lbl_train_stats.config(text=f"训练计算统计: 🔥 算力全开计算中！(Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"))
+                if latest_status == "queued" or (self.last_queue_position is not None and latest_status not in ["training", "running"]):
+                    self.is_actively_training = False
+                    self.last_status = "queued"
+                    if self.queue_start_time is None:
+                        self.queue_start_time = time.time()
+                    wait_mins = (time.time() - self.queue_start_time) / 60
+                    self.root.after(0, lambda w=wait_mins: [
+                        self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列排队中 ({self.current_layer})", fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                        self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                        self.lbl_train_stats.config(
+                            text=f"训练计算统计: ⏳ 待机排队中 (累计历史 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次，等待入队就绪)" if self.forward_count > 0 else "训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)",
+                            fg="#64748b" if not self.dark_mode else "#94a3b8"
+                        )
+                    ])
+                elif latest_status == "initializing":
+                    self.is_actively_training = False
+                    self.last_status = "initializing"
+                    if self.queue_start_time is None:
+                        self.queue_start_time = time.time()
+                    wait_mins = (time.time() - self.queue_start_time) / 60
+                    self.root.after(0, lambda m=mesh_str, w=wait_mins: [
+                        self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列握手中 ({self.current_layer} | {m})", fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                        self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24"),
+                        self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8")
+                    ])
+                elif latest_status in ["training", "running"] or self.is_actively_training:
+                    self.queue_start_time = None
+                    self.root.after(0, lambda: [
+                        self.lbl_node_phase.config(text=f"当前阶段: 🚀 正式训练中 ({self.current_layer} | {self.current_epoch})", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.lbl_init_timer.config(text="排队状态: 🔥 训练已正式开始 (已脱离排队，持续产出算力！)", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.lbl_train_stats.config(text=f"训练计算统计: 🔥 算力全开计算中！(Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80")
+                    ])
                 else:
-                    self.root.after(0, lambda: self.lbl_node_phase.config(text=f"当前阶段: 🟢 活跃通信中 ({self.current_layer})", fg="#15803d" if not self.dark_mode else "#4ade80"))
-                    if self.last_queue_position is not None and not self.is_actively_training:
-                        wait_mins = (time.time() - self.queue_start_time) / 60 if self.queue_start_time else 0.0
-                        self.root.after(0, lambda w=wait_mins: self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24"))
-                    else:
-                        self.root.after(0, lambda: self.lbl_init_timer.config(text="排队状态: 🟢 通信正常保持中", fg="#15803d" if not self.dark_mode else "#4ade80"))
+                    self.root.after(0, lambda: [
+                        self.lbl_node_phase.config(text=f"当前阶段: 🟢 活跃通信中 ({self.current_layer})", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.lbl_init_timer.config(text="排队状态: 🟢 通信正常保持中", fg="#15803d" if not self.dark_mode else "#4ade80")
+                    ])
 
             except Exception:
                 pass

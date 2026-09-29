@@ -1,0 +1,37 @@
+name: Build macOS app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tkinter
+        run: /usr/bin/python3 -c "import tkinter; print('tkinter OK')"
+
+      - name: Install PyInstaller
+        run: /usr/bin/python3 -m pip install --user pyinstaller
+
+      - name: Build
+        run: bash build_app.sh
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IOTA-Watchdog-macOS
+          path: IOTA-Watchdog-macOS.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: IOTA-Watchdog-macOS.zip
+          generate_release_notes: true

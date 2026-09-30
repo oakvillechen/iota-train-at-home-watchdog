@@ -2105,6 +2105,24 @@ class IotaWatchdogApp:
             ent_token.insert(0, self.config.get("github_token", ""))
             ent_token.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
 
+            def _enable_clipboard(entry):
+                def _paste(e=None):
+                    try:
+                        txt = dlg.clipboard_get()
+                        if txt:
+                            entry.delete(0, tk.END)
+                            entry.insert(0, txt.strip())
+                        return "break"
+                    except Exception:
+                        return None
+                entry.bind("<Command-v>", _paste)
+                entry.bind("<Command-V>", _paste)
+                entry.bind("<Control-v>", _paste)
+
+            _enable_clipboard(ent_name)
+            _enable_clipboard(ent_token)
+            _enable_clipboard(ent_repo)
+
             def _toggle_token_visibility():
                 if ent_token.cget("show") == "*":
                     ent_token.config(show="")
@@ -2113,6 +2131,19 @@ class IotaWatchdogApp:
                     ent_token.config(show="*")
                     btn_view_token.config(text="👁️ 显示")
 
+            def _paste_token():
+                try:
+                    txt = dlg.clipboard_get().strip()
+                    if txt:
+                        ent_token.delete(0, tk.END)
+                        ent_token.insert(0, txt)
+                        lbl_msg.config(text="✅ 已从系统剪贴板粘贴 Token", fg="#10b981")
+                except Exception as e:
+                    lbl_msg.config(text=f"无法读取剪贴板: {e}", fg="#ef4444")
+
+            btn_paste_token = tk.Button(token_frame, text="📋 粘贴", font=("Helvetica", 10), command=_paste_token, bg=entry_bg, fg=fg_main, relief="flat", bd=1)
+            btn_paste_token.pack(side=tk.RIGHT, padx=(4, 0))
+
             btn_view_token = tk.Button(token_frame, text="👁️ 显示", font=("Helvetica", 10), command=_toggle_token_visibility, bg=entry_bg, fg=fg_main, relief="flat", bd=1)
             btn_view_token.pack(side=tk.RIGHT, padx=(4, 0))
 
@@ -2120,6 +2151,7 @@ class IotaWatchdogApp:
             ent_repo = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
             ent_repo.insert(0, self.config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog"))
             ent_repo.pack(fill=tk.X, ipady=3, pady=(0, 8))
+            _enable_clipboard(ent_repo)
 
             row_int = tk.Frame(fields, bg=bg_main)
             row_int.pack(fill=tk.X, pady=(2, 8))
@@ -2129,50 +2161,89 @@ class IotaWatchdogApp:
             ent_interval.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
             tk.Label(row_int, text="(推荐 30~60 秒，避免频繁触发 Rate Limit)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
 
-            lbl_msg = tk.Label(container, text=f"上次上报状态: {getattr(self, 'last_cloud_sync_msg', '未上报')}", font=("Helvetica", 10), bg=bg_main, fg="#0ea5e9")
-            lbl_msg.pack(anchor="w", pady=(2, 10))
+            lbl_msg = tk.Label(container, text=f"状态: {getattr(self, 'last_cloud_sync_msg', '待就绪')}", font=("Helvetica", 11, "bold"), bg=bg_main, fg="#0ea5e9", wraplength=480, justify="left")
+            lbl_msg.pack(anchor="w", pady=(4, 10))
 
             btn_bar = tk.Frame(container, bg=bg_main)
             btn_bar.pack(fill=tk.X, side=tk.BOTTOM, pady=(8, 0))
 
             def _do_test():
                 token = ent_token.get().strip()
+                # 如果输入框为空，尝试从已保存或 .github_token 中回退
                 if not token:
-                    messagebox.showwarning("提示", "请先填入 GitHub Token 再测试！", parent=dlg)
+                    token = self.config.get("github_token", "").strip()
+                if not token:
+                    token_f = os.path.join(LOG_DIR, ".github_token")
+                    if os.path.exists(token_f):
+                        try:
+                            token = open(token_f).read().strip()
+                        except Exception:
+                            pass
+
+                if not token:
+                    lbl_msg.config(text="❌ 请先填入 GitHub Token (或点击右侧 📋 粘贴)！", fg="#ef4444")
                     return
-                lbl_msg.config(text="正在连接 GitHub API 进行测试上报...", fg="#f59e0b")
+
+                # UI 状态置为进行中
+                lbl_msg.config(text="⏳ 正在连接 GitHub API 上报测试数据...", fg="#f59e0b")
+                btn_test.config(text="⏳ 上报中...")
                 dlg.update()
 
+                w_name = ent_name.get().strip() or socket.gethostname().split('.')[0]
                 temp_cfg = {
                     "github_token": token,
                     "github_repo": ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog",
                     "github_branch": self.config.get("github_branch", "main"),
-                    "worker_name": ent_name.get().strip(),
-                    "worker_id": f"node-{socket.gethostname().split('.')[0].lower()}"
+                    "worker_name": w_name,
+                    "worker_id": f"node-{w_name.lower().replace(' ', '-')}"
                 }
                 payload = self.get_current_telemetry_payload()
-                if iota_cluster_sync is None:
-                    messagebox.showerror("错误", "未能加载 iota_cluster_sync 模块", parent=dlg)
-                    return
-                ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
-                if ok:
-                    lbl_msg.config(text=f"✅ 测试成功: {res_msg}", fg="#10b981")
-                    messagebox.showinfo("成功", f"🎉 上报测试成功！数据已推送至 {temp_cfg['github_repo']}/data/", parent=dlg)
-                else:
-                    lbl_msg.config(text=f"❌ 失败: {res_msg}", fg="#ef4444")
-                    messagebox.showerror("上报失败", f"测试失败，原因:\n{res_msg}", parent=dlg)
+
+                def _async_worker():
+                    try:
+                        if iota_cluster_sync is None:
+                            dlg.after(0, lambda: [
+                                lbl_msg.config(text="❌ 错误: 未能加载 iota_cluster_sync 模块", fg="#ef4444"),
+                                btn_test.config(text="🚀 测试上报一次")
+                            ])
+                            return
+
+                        ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
+                        if ok:
+                            self.last_cloud_sync_time = time.time()
+                            self.last_cloud_sync_msg = res_msg
+                            self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 data/{temp_cfg['worker_id']}.json)")
+                            dlg.after(0, lambda: [
+                                lbl_msg.config(text=f"✅ 测试成功: {res_msg}\n数据已推送到 {temp_cfg['github_repo']}/data/{temp_cfg['worker_id']}.json", fg="#10b981"),
+                                btn_test.config(text="🚀 测试上报一次")
+                            ])
+                        else:
+                            self.append_watchdog_log(f"⚠️ [云端测试失败] {res_msg}")
+                            dlg.after(0, lambda: [
+                                lbl_msg.config(text=f"❌ 上报失败: {res_msg}", fg="#ef4444"),
+                                btn_test.config(text="🚀 测试上报一次")
+                            ])
+                    except Exception as err:
+                        dlg.after(0, lambda: [
+                            lbl_msg.config(text=f"❌ 网络请求异常: {err}", fg="#ef4444"),
+                            btn_test.config(text="🚀 测试上报一次")
+                        ])
+
+                threading.Thread(target=_async_worker, daemon=True).start()
 
             def _do_save():
                 self.config["cloud_sync_enabled"] = sync_var.get()
                 self.config["worker_name"] = ent_name.get().strip()
-                self.config["github_token"] = ent_token.get().strip()
+                t_input = ent_token.get().strip()
+                if t_input:
+                    self.config["github_token"] = t_input
                 self.config["github_repo"] = ent_repo.get().strip()
                 try:
                     self.config["cloud_sync_interval_seconds"] = max(15, int(ent_interval.get().strip()))
                 except ValueError:
                     self.config["cloud_sync_interval_seconds"] = 60
                 save_config(self.config)
-                self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
+                self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 别名: {self.config['worker_name']}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
                 dlg.destroy()
 
             def _open_dashboard():

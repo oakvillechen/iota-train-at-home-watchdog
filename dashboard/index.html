@@ -639,9 +639,12 @@
 
       const processedMiners = minersData.map(m => {
         const lastSeenAgo = now - (m.updated_at || 0);
-        // 超时判定：超过 3 分钟 (180秒) 算失联
-        const isStale = lastSeenAgo > 180;
-        const isOffline = isStale || !m.proc_running;
+        // 超时判定优化：
+        // 1. 如果 proc_running 为 false，则节点进程停止 (OFFLINE)
+        // 2. 如果超过 8 分钟 (480秒) 无心跳，判定为完全失联/离线 (OFFLINE)
+        // 3. 如果在 3~8 分钟无新心跳，判定为网络同步延迟 (SYNC DELAY，黄色提示，不判定为离线)
+        const isOffline = !m.proc_running || lastSeenAgo > 480;
+        const isStale = !isOffline && lastSeenAgo > 180;
         
         let statusCategory = 'active';
         if (isOffline) {
@@ -680,6 +683,7 @@
           ...m,
           lastSeenAgo,
           isOffline,
+          isStale,
           statusCategory
         };
       });
@@ -747,6 +751,7 @@
 
     function renderMinerCard(m) {
       const isOff = m.isOffline;
+      const isStale = m.isStale;
       const isQueue = m.statusCategory === 'queue';
 
       let statusBadge = "";
@@ -756,10 +761,20 @@
       if (isOff) {
         borderColorClass = "status-error border-rose-500/40";
         pulseGlowClass = "bg-rose-500 shadow-cyber-red animate-ping";
+        const offReason = !m.proc_running ? "PROCESS STOPPED / 进程停止" : "OFFLINE / 心跳超时";
         statusBadge = `
           <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-bold tracking-widest uppercase">
             <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-            OFFLINE / 假死
+            ${offReason}
+          </span>
+        `;
+      } else if (isStale) {
+        borderColorClass = "border-amber-500/30";
+        pulseGlowClass = "bg-amber-400 shadow-cyber-amber";
+        statusBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold tracking-widest uppercase">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            SYNC DELAY / 信号延迟
           </span>
         `;
       } else if (isQueue) {

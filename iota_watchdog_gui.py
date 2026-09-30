@@ -2069,9 +2069,6 @@ class IotaWatchdogApp:
             dlg.title("🌐 多机云端监控配置 (Cyber Dashboard)")
             dlg.geometry("540x480")
             dlg.resizable(False, False)
-            dlg.transient(self.root)
-            dlg.lift()
-            dlg.focus_force()
 
             bg_main = "#0f172a" if self.dark_mode else "#f8fafc"
             fg_main = "#f1f5f9" if self.dark_mode else "#0f172a"

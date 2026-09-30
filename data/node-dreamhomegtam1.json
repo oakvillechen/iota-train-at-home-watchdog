@@ -1,0 +1,19 @@
+{
+  "worker_id": "node-dreamhomegtam1",
+  "worker_name": "DreamHomeGTAM1",
+  "ip": "192.168.40.227",
+  "updated_at": 1790794541,
+  "updated_at_str": "2026-09-30 14:55:41",
+  "status": "training",
+  "phase": "正常运行中",
+  "proc_running": true,
+  "queue_pos": 0,
+  "upload_speed": "14.3 Mbps",
+  "download_speed": "26.6 Mbps",
+  "speedtest_time": "",
+  "peers_count": 8,
+  "restart_count": 0,
+  "recent_tokens": "22.5万",
+  "cycle_tokens": "--",
+  "last_log": "Manual Test Trigger"
+}

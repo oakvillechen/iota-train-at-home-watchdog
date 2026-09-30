@@ -6,6 +6,7 @@
 
 ## ✨ Features
 
+- 🌐 **Cyber Cluster Dashboard (P0)**: 赛博朋克风格的多机云端监控大屏。每台矿工机器自动上报状态至 GitHub 仓库，可在 GitHub Pages 网页上集中实时查看多台机器的在线状态、Layer 阶段、近 6 小时贡献、测速带宽与实时终端日志。
 - 🧟 **On-Chain Zombie State Detection (P0)**: Correlates local logs with on-chain `token_count` metrics. If local process is running and heartbeats are fresh but on-chain tokens stay flat for >2h while network tokens continue growing, triggers an amber/red warning banner with official guide links and restart advice (alert only, no auto-restart).
 - 📊 **Ground Truth vs. Local Estimate & Live Rank (P0)**: Side-by-side display of on-chain confirmed tokens (`token_count`, ground truth), local forward pass token estimations, real-time miner ranking (e.g. `141/895`), and subnet health trends.
 - 📡 **Orchestrator Allocation & Cache Monitoring (P1)**: Pinpoints miner allocation status (`Waiting for orchestrator` vs `Normal activation stream`), tracks tensor cache size (`Cache 0/16 Empty` vs `16/16 Full`), and monitors `all_layers_training` readiness.

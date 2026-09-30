@@ -13,3 +13,5 @@ dist/
 *.cert
 credentials.json
 secrets.json
+watchdog_config.json
+.github_token

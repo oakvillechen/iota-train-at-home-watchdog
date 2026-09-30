@@ -1,0 +1,19 @@
+{
+  "worker_id": "mac-mini-01",
+  "worker_name": "Mac Mini M4 (客厅主节点)",
+  "ip": "192.168.1.108",
+  "updated_at": 1727721000,
+  "updated_at_str": "2026-09-30 14:10:00",
+  "status": "training",
+  "phase": "训练中 (第 3 层 / Layer 3)",
+  "proc_running": true,
+  "queue_pos": 0,
+  "upload_speed": "24.5 Mbps",
+  "download_speed": "55.8 Mbps",
+  "speedtest_time": "14:00",
+  "peers_count": 8,
+  "restart_count": 0,
+  "recent_tokens": "21.4万",
+  "cycle_tokens": "112.5万",
+  "last_log": "[14:09:55] Layer 3 gradient exchange with 8 peers synced in 380ms"
+}

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IOTA CLUSTER // NEURAL WATCHDOG</title>
+  <!-- Google Fonts: Orbitron & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            orbitron: ['Orbitron', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            rajdhani: ['Rajdhani', 'sans-serif']
+          },
+          colors: {
+            cyber: {
+              bg: '#05070e',
+              surface: 'rgba(10, 16, 30, 0.75)',
+              border: '#15243e',
+              glow: '#00f2fe',
+              neonGreen: '#00ff9d',
+              neonAmber: '#ffaa00',
+              neonRed: '#ff0055',
+              neonPurple: '#a855f7',
+              cyan: '#00f2fe'
+            }
+          },
+          boxShadow: {
+            'cyber-cyan': '0 0 15px rgba(0, 242, 254, 0.3)',
+            'cyber-green': '0 0 15px rgba(0, 255, 157, 0.3)',
+            'cyber-red': '0 0 20px rgba(255, 0, 85, 0.4)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 赛博网格与扫描线特效 */
+    body {
+      background-color: #040711;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.08) 0%, transparent 60%),
+        linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+      color: #cbd5e1;
+    }
+
+    /* 细微 CRT 扫描线 */
+    body::before {
+      content: " ";
+      position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    /* 切角卡片与发光边框 */
+    .cyber-card {
+      position: relative;
+      background: rgba(8, 13, 26, 0.85);
+      border: 1px solid rgba(0, 242, 254, 0.2);
+      backdrop-filter: blur(12px);
+      clip-path: polygon(
+        0 0, 
+        calc(100% - 14px) 0, 
+        100% 14px, 
+        100% 100%, 
+        14px 100%, 
+        0 calc(100% - 14px)
+      );
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .cyber-card:hover {
+      border-color: rgba(0, 242, 254, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 242, 254, 0.15);
+    }
+    .cyber-card.status-error {
+      border-color: rgba(255, 0, 85, 0.5);
+    }
+    .cyber-card.status-error:hover {
+      box-shadow: 0 8px 30px rgba(255, 0, 85, 0.25);
+    }
+
+    /* 赛博按钮切角 */
+    .cyber-btn {
+      position: relative;
+      clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+      transition: all 0.2s;
+    }
+    .cyber-btn:hover {
+      filter: brightness(1.2);
+    }
+
+    /* 呼吸脉冲 */
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.08); }
+    }
+    .glow-pulse {
+      animation: pulseGlow 2.5s infinite ease-in-out;
+    }
+
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #050811;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1a2c4e;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00f2fe;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-mono text-sm antialiased selection:bg-cyan-500 selection:text-black">
+
+  <!-- 顶部 HUD 状态栏 -->
+  <header class="border-b border-cyber-border bg-[#070b16]/90 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- 标志与标题 -->
+      <div class="flex items-center gap-3.5">
+        <div class="relative w-10 h-10 flex items-center justify-center bg-cyan-950/60 border border-cyan-500/40 rounded">
+          <span class="w-3 h-3 bg-cyber-cyan rounded-sm shadow-cyber-cyan animate-pulse"></span>
+          <div class="absolute -inset-1 border border-cyan-500/20 rounded pointer-events-none"></div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-orbitron font-black text-xl tracking-wider text-white">IOTA // WATCHDOG</span>
+            <span class="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded">v2.5 CLUSTER</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-rajdhani uppercase tracking-widest flex items-center gap-2">
+            <span>TRAIN-AT-HOME TELEMETRY HUB</span>
+            <span class="text-slate-600">|</span>
+            <span id="target-repo-tag" class="text-cyan-500/80">REPO: --</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧控制区 -->
+      <div class="flex items-center gap-3">
+        <!-- 自动刷新指示 -->
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded text-xs text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>SYNC: <span id="countdown-text" class="text-cyan-400 font-bold">30s</span></span>
+        </div>
+
+        <!-- 刷新按钮 -->
+        <button id="btn-manual-refresh" onclick="manualRefresh()" class="cyber-btn bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 px-3.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition">
+          <svg id="refresh-icon" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          REFRESH
+        </button>
+
+        <!-- 设置按钮 -->
+        <button onclick="toggleSettingsModal(true)" class="cyber-btn bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          CONFIG
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主体内容 -->
+  <main class="max-w-7xl mx-auto px-4 lg:px-8 py-6 flex-1 w-full">
+
+    <!-- 集群核心指标 HUD Strip (4 列统计卡片) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-7">
+      
+      <!-- 卡片 1: 节点总览 -->
+      <div class="cyber-card p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <span>CLUSTER NODES</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-cyber-cyan"></span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="stat-online-nodes" class="text-3xl font-orbitron font-bold text-white tracking-wider">0</span>
+          <span class="text-xs text-slate-400 font-rajdhani uppercase">/ <span id="stat-total-nodes" class="text-slate-300">0</span> ONLINE</span>
+        </div>
+        <div class="mt-2 w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
+          <div id="stat-nodes-bar" class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full w-0 transition-all duration-500"></div>
+        </div>
+      </div>
+
+      <!-- 卡片 2: 近 6 小时总贡献 Token -->
+      <div class="cyber-card p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <span>EST. RECENT CONTRIBUTIONS</span>
+          <span class="text-emerald-400 text-xs font-bold">6H TOTAL</span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="stat-total-tokens" class="text-3xl font-orbitron font-bold text-emerald-400 tracking-wider">--</span>
+          <span class="text-xs text-slate-400 font-rajdhani">TOKENS</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 truncate">
+          集群聚合有效训练贡献
+        </div>
+      </div>
+
+      <!-- 卡片 3: 集群综合上/下行网络 -->
+      <div class="cyber-card p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <span>BANDWIDTH THROUGHPUT</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-3">
+          <div class="flex items-center gap-1 text-cyan-300">
+            <span class="text-xs">⬆</span>
+            <span id="stat-avg-up" class="text-xl font-orbitron font-bold">--</span>
+          </div>
+          <div class="flex items-center gap-1 text-indigo-300">
+            <span class="text-xs">⬇</span>
+            <span id="stat-avg-down" class="text-xl font-orbitron font-bold">--</span>
+          </div>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-400 truncate">
+          全集群最新测速平均值
+        </div>
+      </div>
+
+      <!-- 卡片 4: 异常告警状态 -->
+      <div class="cyber-card p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
+          <span>ALERT & HEALTH</span>
+          <span id="stat-alert-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        </div>
+        <div class="mt-2 flex items-baseline gap-2">
+          <span id="stat-alert-count" class="text-3xl font-orbitron font-bold text-emerald-400 tracking-wider">0</span>
+          <span class="text-xs text-slate-400 font-rajdhani">WARNINGS</span>
+        </div>
+        <div id="stat-health-status" class="mt-2 text-[11px] text-emerald-400 font-medium truncate">
+          ALL NODES NOMINAL
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 筛选、排序与视图控制条 -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+      
+      <!-- 状态过滤器选项 -->
+      <div class="flex items-center gap-1.5 text-xs">
+        <span class="text-slate-400 text-xs font-rajdhani uppercase mr-1">FILTER:</span>
+        <button onclick="setFilter('all')" id="filter-all" class="px-3 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold transition">全部 (<span id="count-all">0</span>)</button>
+        <button onclick="setFilter('active')" id="filter-active" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">训练中 (<span id="count-active">0</span>)</button>
+        <button onclick="setFilter('queue')" id="filter-queue" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">排队保护 (<span id="count-queue">0</span>)</button>
+        <button onclick="setFilter('offline')" id="filter-offline" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">失联/异常 (<span id="count-offline">0</span>)</button>
+      </div>
+
+      <!-- 搜索框与 Demo 开关 -->
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <input type="text" id="search-input" oninput="renderCluster()" placeholder="搜索机器名 / IP..." class="bg-[#0b1020] border border-slate-700 text-xs text-white rounded px-3 py-1.5 pl-8 focus:outline-none focus:border-cyan-400 w-44 md:w-56 transition">
+          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-400 select-none">
+          <input type="checkbox" id="mock-toggle" onchange="toggleMockData(this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+          <span>DEMO 模拟集群</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 节点卡片矩阵 Grid -->
+    <div id="miners-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- 动态插入各个 Miner 卡片 -->
+    </div>
+
+    <!-- 空数据提示状态 -->
+    <div id="empty-state" class="hidden text-center py-20 border border-dashed border-slate-800 rounded-xl bg-slate-950/40">
+      <div class="w-12 h-12 mx-auto mb-3 flex items-center justify-center rounded-full bg-cyan-950/40 text-cyan-400 border border-cyan-500/20">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+        </svg>
+      </div>
+      <h3 class="text-base font-orbitron font-semibold text-slate-300">NO ACTIVE MINER NODES FOUND</h3>
+      <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">尚未探测到任何在线上报的 Watchdog 数据。请确保机器已开启上报，或勾选右上角 "DEMO 模拟集群" 预览视觉效果。</p>
+      <div class="mt-4 flex justify-center gap-3">
+        <button onclick="document.getElementById('mock-toggle').click()" class="cyber-btn bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 px-4 py-1.5 text-xs font-semibold">
+          LOAD DEMO DATA
+        </button>
+        <button onclick="toggleSettingsModal(true)" class="cyber-btn bg-slate-800 border border-slate-700 text-slate-300 px-4 py-1.5 text-xs">
+          CHECK REPO CONFIG
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 底部 Footer -->
+  <footer class="mt-auto border-t border-cyber-border py-4 text-center text-xs text-slate-600 bg-[#04060d]">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        <span>IOTA Train-at-Home Cluster Monitor</span>
+      </div>
+      <div id="footer-time" class="font-mono text-[11px] text-slate-500">
+        SYSTEM TIME: --:--:--
+      </div>
+    </div>
+  </footer>
+
+  <!-- 设置模态窗 (CONFIG MODAL) -->
+  <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="cyber-card w-full max-w-lg p-6 bg-[#090f1d] border-cyan-500/50 shadow-2xl">
+      <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-800">
+        <h3 class="font-orbitron font-bold text-lg text-white flex items-center gap-2">
+          <span class="w-2.5 h-2.5 bg-cyan-400 rounded-sm"></span>
+          CLUSTER REPOSITORY CONFIG
+        </h3>
+        <button onclick="toggleSettingsModal(false)" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">GitHub Owner / Repo</label>
+          <input type="text" id="cfg-repo" value="oakvillechen/iota-train-at-home-watchdog" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
+          <p class="text-[11px] text-slate-500 mt-1">例如: oakvillechen/iota-train-at-home-watchdog</p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Git Branch / 分支</label>
+          <input type="text" id="cfg-branch" value="main" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
+          <p class="text-[11px] text-slate-500 mt-1">存放 data/*.json 的分支，通常为 main 或 gh-pages</p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">GitHub Personal Access Token (可选)</label>
+          <input type="password" id="cfg-token" placeholder="github_pat_xxxx 或留空" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
+          <p class="text-[11px] text-slate-500 mt-1">如果是私有仓库(Private)必填；公开仓库(Public)无需填写也可读取。</p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">自动刷新间隔 (秒)</label>
+          <select id="cfg-interval" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
+            <option value="15">15 秒 (极速)</option>
+            <option value="30" selected>30 秒 (推荐)</option>
+            <option value="60">60 秒 (节能)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-800">
+        <button onclick="toggleSettingsModal(false)" class="px-4 py-2 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold">取消</button>
+        <button onclick="saveSettings()" class="cyber-btn bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-2 text-xs font-bold tracking-wider">保存配置</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= 全局状态与配置 =================
+    const CONFIG_KEY = "iota_watchdog_dashboard_config";
+    let appConfig = {
+      repo: "oakvillechen/iota-train-at-home-watchdog",
+      branch: "main",
+      token: "",
+      interval: 30
+    };
+
+    let minersData = [];
+    let currentFilter = 'all';
+    let countdownSec = 30;
+    let refreshTimer = null;
+    let countdownInterval = null;
+    let isMockMode = false;
+
+    // 默认内置的赛博模拟数据（演示与未连通时兜底体验）
+    const DEMO_MINERS = [
+      {
+        worker_id: "mac-studio-m2-max",
+        worker_name: "Mac Studio (M2 Max) - 64G",
+        ip: "192.168.1.101",
+        updated_at: Math.floor(Date.now() / 1000) - 25,
+        status: "training",
+        phase: "训练中 (第 3 层 / Layer 3)",
+        proc_running: true,
+        queue_pos: 0,
+        upload_speed: "24.8 Mbps",
+        download_speed: "68.2 Mbps",
+        speedtest_time: "14:05",
+        peers_count: 8,
+        restart_count: 0,
+        recent_tokens: "24.8万",
+        cycle_tokens: "128.5万",
+        last_log: "[14:15:30] Layer 3 gradient exchange with 8 peers synced in 412ms"
+      },
+      {
+        worker_id: "mbp-m3-pro-office",
+        worker_name: "MBP 16\" M3 Pro (Node 02)",
+        ip: "192.168.1.105",
+        updated_at: Math.floor(Date.now() / 1000) - 48,
+        status: "queueing",
+        phase: "排队保护中 (队列第 2 位)",
+        proc_running: true,
+        queue_pos: 2,
+        upload_speed: "18.2 Mbps",
+        download_speed: "45.0 Mbps",
+        speedtest_time: "14:02",
+        peers_count: 6,
+        restart_count: 1,
+        recent_tokens: "16.2万",
+        cycle_tokens: "85.2万",
+        last_log: "[14:14:10] Queue position confirmed: #2. Automatic restart suppressed."
+      },
+      {
+        worker_id: "mini-m4-livingroom",
+        worker_name: "Mac Mini M4 (Node 03)",
+        ip: "192.168.1.112",
+        updated_at: Math.floor(Date.now() / 1000) - 95,
+        status: "training",
+        phase: "训练中 (第 4 层 / Layer 4)",
+        proc_running: true,
+        queue_pos: 0,
+        upload_speed: "15.6 Mbps",
+        download_speed: "32.1 Mbps",
+        speedtest_time: "13:58",
+        peers_count: 7,
+        restart_count: 0,
+        recent_tokens: "19.7万",
+        cycle_tokens: "102.1万",
+        last_log: "[14:13:45] Gradient broadcast chunk #142 verified by peer mesh"
+      }
+    ];
+
+    // ================= 初始化与设置 =================
+    function init() {
+      loadStoredConfig();
+      document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
+      
+      // 更新系统时间
+      setInterval(() => {
+        const now = new Date();
+        document.getElementById("footer-time").innerText = `SYSTEM TIME: ${now.toLocaleTimeString()} UTC${now.getTimezoneOffset() <= 0 ? '+' : ''}${-now.getTimezoneOffset()/60}`;
+      }, 1000);
+
+      // 启动轮询
+      startSyncCountdown();
+      fetchClusterData();
+    }
+
+    function loadStoredConfig() {
+      try {
+        const saved = localStorage.getItem(CONFIG_KEY);
+        if (saved) {
+          appConfig = { ...appConfig, ...JSON.parse(saved) };
+        }
+      } catch (e) {}
+
+      document.getElementById("cfg-repo").value = appConfig.repo;
+      document.getElementById("cfg-branch").value = appConfig.branch;
+      document.getElementById("cfg-token").value = appConfig.token || "";
+      document.getElementById("cfg-interval").value = appConfig.interval || 30;
+      countdownSec = appConfig.interval || 30;
+    }
+
+    function saveSettings() {
+      appConfig.repo = document.getElementById("cfg-repo").value.trim() || "oakvillechen/iota-train-at-home-watchdog";
+      appConfig.branch = document.getElementById("cfg-branch").value.trim() || "main";
+      appConfig.token = document.getElementById("cfg-token").value.trim();
+      appConfig.interval = parseInt(document.getElementById("cfg-interval").value, 10) || 30;
+
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
+      document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
+      toggleSettingsModal(false);
+
+      countdownSec = appConfig.interval;
+      fetchClusterData();
+    }
+
+    function toggleSettingsModal(show) {
+      const modal = document.getElementById("settings-modal");
+      if (show) modal.classList.remove("hidden");
+      else modal.classList.add("hidden");
+    }
+
+    function toggleMockData(checked) {
+      isMockMode = checked;
+      if (checked) {
+        minersData = [...DEMO_MINERS];
+        renderCluster();
+      } else {
+        fetchClusterData();
+      }
+    }
+
+    // ================= 自动刷新与倒计时 =================
+    function startSyncCountdown() {
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        countdownSec--;
+        if (countdownSec <= 0) {
+          countdownSec = appConfig.interval || 30;
+          fetchClusterData();
+        }
+        document.getElementById("countdown-text").innerText = `${countdownSec}s`;
+      }, 1000);
+    }
+
+    function manualRefresh() {
+      const icon = document.getElementById("refresh-icon");
+      icon.classList.add("rotate-180");
+      setTimeout(() => icon.classList.remove("rotate-180"), 500);
+
+      countdownSec = appConfig.interval || 30;
+      fetchClusterData();
+    }
+
+    // ================= 核心数据拉取 =================
+    async function fetchClusterData() {
+      if (isMockMode) {
+        minersData = DEMO_MINERS.map(m => ({
+          ...m,
+          updated_at: Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 60)
+        }));
+        renderCluster();
+        return;
+      }
+
+      const headers = { "Accept": "application/vnd.github+json" };
+      if (appConfig.token) {
+        headers["Authorization"] = `Bearer ${appConfig.token}`;
+      }
+
+      let nodes = [];
+
+      try {
+        // 策略 1: 优先尝试直接从当前同源相对路径读取 ./data/ 目录 (如果是 GitHub Pages 部署)
+        // 策略 2: 调用 GitHub API 列出 data/ 目录下的所有 json 文件
+        const apiUrl = `https://api.github.com/repos/${appConfig.repo}/contents/data?ref=${appConfig.branch}`;
+        const resp = await fetch(apiUrl, { headers });
+
+        if (resp.ok) {
+          const files = await resp.json();
+          if (Array.isArray(files)) {
+            const fetchPromises = files
+              .filter(f => f.name.endsWith(".json"))
+              .map(async f => {
+                try {
+                  const res = await fetch(f.download_url);
+                  return await res.json();
+                } catch (e) {
+                  return null;
+                }
+              });
+            const results = await Promise.all(fetchPromises);
+            nodes = results.filter(Boolean);
+          }
+        } else {
+          // 如果 API 失败（比如未认证达到 rate limit），尝试直接探测本地/同源 ./data/worker_sample.json
+          const sampleRes = await fetch(`./data/worker_sample.json`);
+          if (sampleRes.ok) {
+            const sampleData = await sampleRes.json();
+            nodes = [sampleData];
+          }
+        }
+      } catch (err) {
+        console.warn("API 获取失败，尝试备用链路:", err);
+      }
+
+      minersData = nodes;
+      renderCluster();
+    }
+
+    // ================= 界面渲染与统计 =================
+    function setFilter(filter) {
+      currentFilter = filter;
+      ['all', 'active', 'queue', 'offline'].forEach(f => {
+        const btn = document.getElementById(`filter-${f}`);
+        if (f === filter) {
+          btn.className = "px-3 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold transition";
+        } else {
+          btn.className = "px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition";
+        }
+      });
+      renderCluster();
+    }
+
+    function renderCluster() {
+      const now = Math.floor(Date.now() / 1000);
+      const searchTxt = document.getElementById("search-input").value.toLowerCase().trim();
+
+      // 统计指标
+      let onlineCount = 0;
+      let activeCount = 0;
+      let queueCount = 0;
+      let offlineCount = 0;
+      let totalTokensNum = 0;
+      let totalUpSpeed = 0;
+      let totalDownSpeed = 0;
+      let speedCount = 0;
+
+      const processedMiners = minersData.map(m => {
+        const lastSeenAgo = now - (m.updated_at || 0);
+        // 超时判定：超过 3 分钟 (180秒) 算失联
+        const isStale = lastSeenAgo > 180;
+        const isOffline = isStale || !m.proc_running;
+        
+        let statusCategory = 'active';
+        if (isOffline) {
+          statusCategory = 'offline';
+          offlineCount++;
+        } else if (m.queue_pos && m.queue_pos > 0) {
+          statusCategory = 'queue';
+          queueCount++;
+          onlineCount++;
+        } else {
+          statusCategory = 'active';
+          activeCount++;
+          onlineCount++;
+        }
+
+        // 解析 Token 数值 (支持 "18.5万" 或纯数字)
+        if (m.recent_tokens) {
+          const tVal = parseFloat(m.recent_tokens);
+          if (!isNaN(tVal)) totalTokensNum += tVal;
+        }
+
+        // 解析网速
+        if (m.upload_speed) {
+          const upVal = parseFloat(m.upload_speed);
+          if (!isNaN(upVal)) {
+            totalUpSpeed += upVal;
+            speedCount++;
+          }
+        }
+        if (m.download_speed) {
+          const downVal = parseFloat(m.download_speed);
+          if (!isNaN(downVal)) totalDownSpeed += downVal;
+        }
+
+        return {
+          ...m,
+          lastSeenAgo,
+          isOffline,
+          statusCategory
+        };
+      });
+
+      // 更新 HUD 统计
+      const totalNodes = minersData.length;
+      document.getElementById("stat-online-nodes").innerText = onlineCount;
+      document.getElementById("stat-total-nodes").innerText = totalNodes;
+      document.getElementById("stat-nodes-bar").style.width = totalNodes > 0 ? `${(onlineCount / totalNodes) * 100}%` : '0%';
+
+      document.getElementById("stat-total-tokens").innerText = totalTokensNum > 0 ? `${totalTokensNum.toFixed(1)}W` : "--";
+      
+      document.getElementById("stat-avg-up").innerText = speedCount > 0 ? `${(totalUpSpeed / speedCount).toFixed(1)}M` : "--";
+      document.getElementById("stat-avg-down").innerText = speedCount > 0 ? `${(totalDownSpeed / speedCount).toFixed(1)}M` : "--";
+
+      document.getElementById("stat-alert-count").innerText = offlineCount;
+      const alertDot = document.getElementById("stat-alert-dot");
+      const alertStatus = document.getElementById("stat-health-status");
+      const alertCountTxt = document.getElementById("stat-alert-count");
+
+      if (offlineCount > 0) {
+        alertDot.className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
+        alertStatus.className = "mt-2 text-[11px] text-rose-400 font-semibold truncate";
+        alertStatus.innerText = `${offlineCount} NODE(S) REQUIRES ATTENTION`;
+        alertCountTxt.className = "text-3xl font-orbitron font-bold text-rose-500 tracking-wider";
+      } else {
+        alertDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+        alertStatus.className = "mt-2 text-[11px] text-emerald-400 font-medium truncate";
+        alertStatus.innerText = "ALL NODES NOMINAL";
+        alertCountTxt.className = "text-3xl font-orbitron font-bold text-emerald-400 tracking-wider";
+      }
+
+      // 更新过滤计数
+      document.getElementById("count-all").innerText = totalNodes;
+      document.getElementById("count-active").innerText = activeCount;
+      document.getElementById("count-queue").innerText = queueCount;
+      document.getElementById("count-offline").innerText = offlineCount;
+
+      // 过滤与搜索
+      const filtered = processedMiners.filter(m => {
+        if (currentFilter !== 'all' && m.statusCategory !== currentFilter) return false;
+        if (searchTxt) {
+          const matchName = (m.worker_name || "").toLowerCase().includes(searchTxt);
+          const matchId = (m.worker_id || "").toLowerCase().includes(searchTxt);
+          const matchIp = (m.ip || "").toLowerCase().includes(searchTxt);
+          if (!matchName && !matchId && !matchIp) return false;
+        }
+        return true;
+      });
+
+      const grid = document.getElementById("miners-grid");
+      const emptyState = document.getElementById("empty-state");
+
+      if (filtered.length === 0) {
+        grid.innerHTML = "";
+        emptyState.classList.remove("hidden");
+        return;
+      }
+
+      emptyState.classList.add("hidden");
+
+      // 渲染卡片
+      grid.innerHTML = filtered.map(m => renderMinerCard(m)).join("");
+    }
+
+    function renderMinerCard(m) {
+      const isOff = m.isOffline;
+      const isQueue = m.statusCategory === 'queue';
+
+      let statusBadge = "";
+      let borderColorClass = "border-cyan-500/20";
+      let pulseGlowClass = "bg-emerald-400 shadow-cyber-green";
+
+      if (isOff) {
+        borderColorClass = "status-error border-rose-500/40";
+        pulseGlowClass = "bg-rose-500 shadow-cyber-red animate-ping";
+        statusBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-bold tracking-widest uppercase">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+            OFFLINE / 假死
+          </span>
+        `;
+      } else if (isQueue) {
+        pulseGlowClass = "bg-amber-400 shadow-cyber-amber";
+        statusBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold tracking-widest uppercase">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            QUEUEING (第${m.queue_pos}位)
+          </span>
+        `;
+      } else {
+        statusBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold tracking-widest uppercase">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-cyber-green animate-pulse"></span>
+            TRAINING ACTIVE
+          </span>
+        `;
+      }
+
+      // 时间换算
+      const minsAgo = Math.floor(m.lastSeenAgo / 60);
+      const secsAgo = m.lastSeenAgo % 60;
+      const timeAgoStr = minsAgo > 0 ? `${minsAgo}分${secsAgo}秒前` : `${secsAgo}秒前`;
+
+      return `
+        <div class="cyber-card ${borderColorClass} p-5 flex flex-col justify-between group">
+          <div>
+            <!-- 头部：机器名 + 状态徽章 -->
+            <div class="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <h3 class="font-orbitron font-bold text-base text-white group-hover:text-cyan-400 transition-colors flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full ${pulseGlowClass}"></span>
+                  ${escapeHtml(m.worker_name || m.worker_id)}
+                </h3>
+                <div class="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                  <span>ID: ${escapeHtml(m.worker_id)}</span>
+                  ${m.ip ? `<span class="text-slate-600">|</span><span>${escapeHtml(m.ip)}</span>` : ''}
+                </div>
+              </div>
+              <div class="shrink-0">
+                ${statusBadge}
+              </div>
+            </div>
+
+            <!-- 当前阶段 Phase Banner -->
+            <div class="bg-black/50 border border-slate-800/80 rounded px-3 py-2 mb-4 flex items-center justify-between text-xs">
+              <span class="text-slate-400 text-[11px] font-rajdhani uppercase tracking-wider">PHASE:</span>
+              <span class="font-semibold ${isOff ? 'text-rose-400' : (isQueue ? 'text-amber-300' : 'text-cyan-300')} truncate ml-2">
+                ${escapeHtml(m.phase || (m.proc_running ? '正常运行中' : '进程未启动'))}
+              </span>
+            </div>
+
+            <!-- 核心参数指标网格 (2x2) -->
+            <div class="grid grid-cols-2 gap-2.5 mb-4 text-xs">
+              
+              <!-- 近 6 小时贡献 -->
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800">
+                <div class="text-[10px] text-slate-400 font-rajdhani uppercase">6H CONTRIBUTIONS</div>
+                <div class="text-sm font-orbitron font-bold text-emerald-400 mt-0.5">
+                  ${escapeHtml(m.recent_tokens || '--')}
+                </div>
+              </div>
+
+              <!-- P2P 活跃邻居 -->
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800">
+                <div class="text-[10px] text-slate-400 font-rajdhani uppercase">PEER MESH</div>
+                <div class="text-sm font-orbitron font-bold text-cyan-300 mt-0.5 flex items-center gap-1.5">
+                  <span>${m.peers_count !== undefined ? m.peers_count : '--'} PEERS</span>
+                  <span class="text-[10px] text-slate-500 font-normal">CONNECTED</span>
+                </div>
+              </div>
+
+              <!-- 测速网速 (上行 / 下行) -->
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 col-span-2 flex items-center justify-between">
+                <div>
+                  <div class="text-[10px] text-slate-400 font-rajdhani uppercase">SPEEDTEST RATE</div>
+                  <div class="text-xs font-mono font-medium text-slate-200 mt-0.5 flex items-center gap-3">
+                    <span class="text-cyan-300">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
+                    <span class="text-indigo-300">⬇ ${escapeHtml(m.download_speed || '--')}</span>
+                  </div>
+                </div>
+                ${m.speedtest_time ? `<div class="text-[10px] text-slate-500 font-mono">${escapeHtml(m.speedtest_time)}</div>` : ''}
+              </div>
+
+            </div>
+
+            <!-- 终端日志微型面板 (Cyber Terminal Strip) -->
+            <div class="mb-3">
+              <div class="text-[10px] text-slate-500 font-rajdhani uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>LATEST LOG TELEMETRY</span>
+                <span>TAIL -1</span>
+              </div>
+              <div class="bg-[#03060f] p-2.5 rounded border border-cyan-950 text-[11px] font-mono text-cyan-400/90 leading-relaxed break-all max-h-16 overflow-y-auto selection:bg-cyan-500 selection:text-black">
+                ${escapeHtml(m.last_log || "等待最新控制台输出...")}
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 底部心跳时间与状态条 -->
+          <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full ${isOff ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+              <span>心跳: <span class="${isOff ? 'text-rose-400 font-bold' : 'text-slate-300'}">${timeAgoStr}</span></span>
+            </div>
+            <div>
+              重启: <span class="text-slate-300 font-mono">${m.restart_count || 0}</span> 次
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // 页面加载触发
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

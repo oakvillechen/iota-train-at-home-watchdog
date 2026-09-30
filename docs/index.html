@@ -3,166 +3,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IOTA CLUSTER // NEURAL WATCHDOG</title>
-  <!-- Google Fonts: Orbitron & JetBrains Mono -->
+  <title>IOTA // MISSION CONTROL</title>
+  <!-- Google Fonts: Space Grotesk, Barlow, JetBrains Mono (SpaceX Aerospace Aesthetic) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
-            orbitron: ['Orbitron', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-            rajdhani: ['Rajdhani', 'sans-serif']
+            sans: ['Barlow', 'sans-serif'],
+            display: ['"Space Grotesk"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
           },
           colors: {
-            cyber: {
-              bg: '#05070e',
-              surface: 'rgba(10, 16, 30, 0.75)',
-              border: '#15243e',
-              glow: '#00f2fe',
-              neonGreen: '#00ff9d',
-              neonAmber: '#ffaa00',
-              neonRed: '#ff0055',
-              neonPurple: '#a855f7',
-              cyan: '#00f2fe'
+            space: {
+              bg: '#07090e',
+              panel: '#0d111a',
+              panelHover: '#121724',
+              subPanel: '#141a27',
+              border: '#1e2638',
+              borderHover: '#2e3a54',
+              cyan: '#38bdf8',
+              emerald: '#10b981',
+              amber: '#f59e0b',
+              red: '#ef4444'
             }
-          },
-          boxShadow: {
-            'cyber-cyan': '0 0 15px rgba(0, 242, 254, 0.3)',
-            'cyber-green': '0 0 15px rgba(0, 255, 157, 0.3)',
-            'cyber-red': '0 0 20px rgba(255, 0, 85, 0.4)',
           }
         }
       }
     }
   </script>
   <style>
-    /* 赛博网格与扫描线特效 */
+    /* SpaceX Telemetry Aesthetics: Deep space matte black, crisp lines, zero fuzzy glow */
     body {
-      background-color: #040711;
+      background-color: #07090e;
       background-image: 
-        radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.08) 0%, transparent 60%),
-        linear-gradient(rgba(0, 242, 254, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 242, 254, 0.03) 1px, transparent 1px);
-      background-size: 100% 100%, 32px 32px, 32px 32px;
-      color: #cbd5e1;
+        radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.04) 0%, transparent 50%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      color: #e2e8f0;
     }
 
-    /* 细微 CRT 扫描线 */
-    body::before {
-      content: " ";
-      position: fixed;
-      top: 0; left: 0; bottom: 0; right: 0;
-      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-      background-size: 100% 4px;
-      z-index: 999;
-      pointer-events: none;
-      opacity: 0.6;
+    /* SpaceX Flight Card */
+    .space-panel {
+      background: #0d111a;
+      border: 1px solid #1e2638;
+      border-radius: 8px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .space-panel:hover {
+      border-color: #2e3a54;
+      background: #0f1420;
+    }
+    .space-panel.panel-error {
+      border-color: rgba(239, 68, 68, 0.5);
     }
 
-    /* 切角卡片与发光边框 */
-    .cyber-card {
-      position: relative;
-      background: rgba(8, 13, 26, 0.85);
-      border: 1px solid rgba(0, 242, 254, 0.2);
-      backdrop-filter: blur(12px);
-      clip-path: polygon(
-        0 0, 
-        calc(100% - 14px) 0, 
-        100% 14px, 
-        100% 100%, 
-        14px 100%, 
-        0 calc(100% - 14px)
-      );
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    /* Minimal Button */
+    .space-btn {
+      transition: all 0.15s ease-in-out;
+      border-radius: 4px;
     }
-    .cyber-card:hover {
-      border-color: rgba(0, 242, 254, 0.5);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(0, 242, 254, 0.15);
-    }
-    .cyber-card.status-error {
-      border-color: rgba(255, 0, 85, 0.5);
-    }
-    .cyber-card.status-error:hover {
-      box-shadow: 0 8px 30px rgba(255, 0, 85, 0.25);
+    .space-btn:hover {
+      filter: brightness(1.15);
     }
 
-    /* 赛博按钮切角 */
-    .cyber-btn {
-      position: relative;
-      clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-      transition: all 0.2s;
-    }
-    .cyber-btn:hover {
-      filter: brightness(1.2);
-    }
-
-    /* 呼吸脉冲 */
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 0.3; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.08); }
-    }
-    .glow-pulse {
-      animation: pulseGlow 2.5s infinite ease-in-out;
-    }
-
-    /* 自定义滚动条 */
+    /* Custom Scrollbar */
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
     }
     ::-webkit-scrollbar-track {
-      background: #050811;
+      background: #07090e;
     }
     ::-webkit-scrollbar-thumb {
-      background: #1a2c4e;
+      background: #1e2638;
       border-radius: 3px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #00f2fe;
+      background: #38bdf8;
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col font-mono text-sm antialiased selection:bg-cyan-500 selection:text-black">
+<body class="min-h-screen flex flex-col font-sans text-sm antialiased selection:bg-sky-500 selection:text-black">
 
-  <!-- 顶部 HUD 状态栏 -->
-  <header class="border-b border-cyber-border bg-[#070b16]/90 backdrop-blur-md sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+  <!-- 顶部 SpaceX 风格 Mission Control 导航栏 -->
+  <header class="border-b border-space-border bg-[#090d16]/95 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
       
-      <!-- 标志与标题 -->
+      <!-- Logo 与 控制中心标识 -->
       <div class="flex items-center gap-3.5">
-        <div class="relative w-10 h-10 flex items-center justify-center bg-cyan-950/60 border border-cyan-500/40 rounded">
-          <span class="w-3 h-3 bg-cyber-cyan rounded-sm shadow-cyber-cyan animate-pulse"></span>
-          <div class="absolute -inset-1 border border-cyan-500/20 rounded pointer-events-none"></div>
+        <div class="w-8 h-8 rounded bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-display font-bold text-sm tracking-wider">
+          ▲
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <span class="font-orbitron font-black text-xl tracking-wider text-white">IOTA // WATCHDOG</span>
-            <span class="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded">v2.5 CLUSTER</span>
+            <span class="font-display font-bold text-base md:text-lg tracking-wider text-white">IOTA // MISSION CONTROL</span>
+            <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-400">FLIGHT v2.5</span>
           </div>
-          <div class="text-[11px] text-slate-400 font-rajdhani uppercase tracking-widest flex items-center gap-2">
-            <span>TRAIN-AT-HOME TELEMETRY HUB</span>
-            <span class="text-slate-600">|</span>
-            <span id="target-repo-tag" class="text-cyan-500/80">REPO: --</span>
+          <div class="text-[11px] text-slate-400 font-mono tracking-wider flex items-center gap-2">
+            <span>TRAIN-AT-HOME TELEMETRY</span>
+            <span class="text-slate-600">/</span>
+            <span id="target-repo-tag" class="text-slate-400">REPO: --</span>
           </div>
         </div>
       </div>
 
-      <!-- 右侧控制区 -->
+      <!-- 右侧时钟与操作区 -->
       <div class="flex items-center gap-3">
-        <!-- 自动刷新指示 -->
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded text-xs text-slate-300">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>SYNC: <span id="countdown-text" class="text-cyan-400 font-bold">30s</span></span>
+        <!-- 任务时钟 (UTC + Local) -->
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-space-bg border border-space-border rounded font-mono text-xs text-slate-300">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="mission-clock" class="text-slate-300 font-medium">UTC --:--:--</span>
+        </div>
+
+        <!-- 自动刷新倒计时 -->
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-space-bg border border-space-border rounded font-mono text-xs text-slate-300">
+          <span class="text-slate-400 text-[11px]">SYNC</span>
+          <span id="countdown-text" class="text-sky-400 font-bold">30s</span>
         </div>
 
         <!-- 刷新按钮 -->
-        <button id="btn-manual-refresh" onclick="manualRefresh()" class="cyber-btn bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 px-3.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition">
+        <button id="btn-manual-refresh" onclick="manualRefresh()" class="space-btn bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
           <svg id="refresh-icon" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
@@ -170,7 +136,7 @@
         </button>
 
         <!-- 设置按钮 -->
-        <button onclick="toggleSettingsModal(true)" class="cyber-btn bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5">
+        <button onclick="toggleSettingsModal(true)" class="space-btn bg-space-bg hover:bg-space-subPanel border border-space-border text-slate-300 px-3 py-1.5 text-xs font-medium flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -184,125 +150,131 @@
   <!-- 主体内容 -->
   <main class="max-w-7xl mx-auto px-4 lg:px-8 py-6 flex-1 w-full">
 
-    <!-- 集群核心指标 HUD Strip (4 列统计卡片) -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-7">
+    <!-- SpaceX Telemetry HUD Strip (4 列核心指标) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
       
-      <!-- 卡片 1: 节点总览 -->
-      <div class="cyber-card p-4 flex flex-col justify-between">
-        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
-          <span>CLUSTER NODES</span>
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-cyber-cyan"></span>
+      <!-- 指标 1: 集群节点 -->
+      <div class="space-panel p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-mono tracking-wider text-slate-400 uppercase flex items-center justify-between">
+          <span>ACTIVE NODES</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
         </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="stat-online-nodes" class="text-3xl font-orbitron font-bold text-white tracking-wider">0</span>
-          <span class="text-xs text-slate-400 font-rajdhani uppercase">/ <span id="stat-total-nodes" class="text-slate-300">0</span> ONLINE</span>
+        <div class="mt-2.5 flex items-baseline gap-2">
+          <span id="stat-online-nodes" class="text-3xl font-display font-bold text-white tracking-tight">0</span>
+          <span class="text-xs text-slate-400 font-mono">/ <span id="stat-total-nodes" class="text-slate-300">0</span> ONLINE</span>
         </div>
-        <div class="mt-2 w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
-          <div id="stat-nodes-bar" class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full w-0 transition-all duration-500"></div>
-        </div>
-      </div>
-
-      <!-- 卡片 2: 近 6 小时总贡献 Token -->
-      <div class="cyber-card p-4 flex flex-col justify-between">
-        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
-          <span>EST. RECENT CONTRIBUTIONS</span>
-          <span class="text-emerald-400 text-xs font-bold">6H TOTAL</span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="stat-total-tokens" class="text-3xl font-orbitron font-bold text-emerald-400 tracking-wider">--</span>
-          <span class="text-xs text-slate-400 font-rajdhani">TOKENS</span>
-        </div>
-        <div class="mt-2 text-[11px] text-slate-400 truncate">
-          集群聚合有效训练贡献
-        </div>
-      </div>
-
-      <!-- 卡片 3: 集群综合上/下行网络 -->
-      <div class="cyber-card p-4 flex flex-col justify-between">
-        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
-          <span>BANDWIDTH THROUGHPUT</span>
-          <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-3">
-          <div class="flex items-center gap-1 text-cyan-300">
-            <span class="text-xs">⬆</span>
-            <span id="stat-avg-up" class="text-xl font-orbitron font-bold">--</span>
+        <div class="mt-3">
+          <div class="w-full bg-space-bg h-1 rounded-full overflow-hidden border border-space-border">
+            <div id="stat-nodes-bar" class="bg-emerald-400 h-full w-0 transition-all duration-500"></div>
           </div>
-          <div class="flex items-center gap-1 text-indigo-300">
-            <span class="text-xs">⬇</span>
-            <span id="stat-avg-down" class="text-xl font-orbitron font-bold">--</span>
+          <div class="text-[11px] text-slate-500 font-mono mt-1.5 flex justify-between">
+            <span>AVAILABILITY</span>
+            <span id="stat-nodes-pct" class="text-emerald-400 font-medium">100%</span>
           </div>
         </div>
-        <div class="mt-2 text-[11px] text-slate-400 truncate">
-          全集群最新测速平均值
+      </div>
+
+      <!-- 指标 2: 近 6 小时总贡献 Token -->
+      <div class="space-panel p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-mono tracking-wider text-slate-400 uppercase flex items-center justify-between">
+          <span>6H AGGREGATE TOKENS</span>
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">6H ROLLING</span>
+        </div>
+        <div class="mt-2.5 flex items-baseline gap-2">
+          <span id="stat-total-tokens" class="text-3xl font-display font-bold text-emerald-400 tracking-tight">--</span>
+          <span class="text-xs text-slate-400 font-mono">TOKENS</span>
+        </div>
+        <div class="mt-3 text-[11px] text-slate-500 font-mono truncate">
+          全集群有效贡献聚合总量
         </div>
       </div>
 
-      <!-- 卡片 4: 异常告警状态 -->
-      <div class="cyber-card p-4 flex flex-col justify-between">
-        <div class="text-[11px] font-rajdhani uppercase tracking-widest text-slate-400 flex items-center justify-between">
-          <span>ALERT & HEALTH</span>
+      <!-- 指标 3: 集群综合上/下行网络 -->
+      <div class="space-panel p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-mono tracking-wider text-slate-400 uppercase flex items-center justify-between">
+          <span>CLUSTER BANDWIDTH</span>
+          <span class="text-[10px] font-mono text-sky-400">P2P MESH</span>
+        </div>
+        <div class="mt-2.5 flex items-baseline gap-4">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-sky-400 font-bold">⬆</span>
+            <span id="stat-avg-up" class="text-2xl font-display font-bold text-white">--</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs text-indigo-400 font-bold">⬇</span>
+            <span id="stat-avg-down" class="text-2xl font-display font-bold text-white">--</span>
+          </div>
+        </div>
+        <div class="mt-3 text-[11px] text-slate-500 font-mono truncate">
+          最新网络上行 / 下行平均速率
+        </div>
+      </div>
+
+      <!-- 指标 4: 集群健康状态 -->
+      <div class="space-panel p-4 flex flex-col justify-between">
+        <div class="text-[11px] font-mono tracking-wider text-slate-400 uppercase flex items-center justify-between">
+          <span>SYSTEM INTEGRITY</span>
           <span id="stat-alert-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
         </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span id="stat-alert-count" class="text-3xl font-orbitron font-bold text-emerald-400 tracking-wider">0</span>
-          <span class="text-xs text-slate-400 font-rajdhani">WARNINGS</span>
+        <div class="mt-2.5 flex items-baseline gap-2">
+          <span id="stat-alert-count" class="text-3xl font-display font-bold text-emerald-400 tracking-tight">0</span>
+          <span class="text-xs text-slate-400 font-mono">ANOMALIES</span>
         </div>
-        <div id="stat-health-status" class="mt-2 text-[11px] text-emerald-400 font-medium truncate">
-          ALL NODES NOMINAL
+        <div id="stat-health-status" class="mt-3 text-[11px] text-emerald-400 font-mono font-medium truncate">
+          ALL SYSTEMS NOMINAL
         </div>
       </div>
 
     </div>
 
-    <!-- 筛选、排序与视图控制条 -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+    <!-- 筛选、搜索与工具栏 -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 bg-space-panel/60 p-2.5 rounded-lg border border-space-border">
       
-      <!-- 状态过滤器选项 -->
-      <div class="flex items-center gap-1.5 text-xs">
-        <span class="text-slate-400 text-xs font-rajdhani uppercase mr-1">FILTER:</span>
-        <button onclick="setFilter('all')" id="filter-all" class="px-3 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold transition">全部 (<span id="count-all">0</span>)</button>
-        <button onclick="setFilter('active')" id="filter-active" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">训练中 (<span id="count-active">0</span>)</button>
-        <button onclick="setFilter('queue')" id="filter-queue" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">排队保护 (<span id="count-queue">0</span>)</button>
-        <button onclick="setFilter('offline')" id="filter-offline" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition">失联/异常 (<span id="count-offline">0</span>)</button>
+      <!-- 过滤选项 -->
+      <div class="flex items-center gap-1 text-xs">
+        <span class="text-slate-500 font-mono text-[11px] mr-1.5 uppercase">FILTER:</span>
+        <button onclick="setFilter('all')" id="filter-all" class="px-2.5 py-1 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-medium transition">全部 (<span id="count-all">0</span>)</button>
+        <button onclick="setFilter('active')" id="filter-active" class="px-2.5 py-1 rounded bg-space-bg hover:bg-space-subPanel text-slate-300 border border-transparent transition">训练中 (<span id="count-active">0</span>)</button>
+        <button onclick="setFilter('queue')" id="filter-queue" class="px-2.5 py-1 rounded bg-space-bg hover:bg-space-subPanel text-slate-300 border border-transparent transition">排队保护 (<span id="count-queue">0</span>)</button>
+        <button onclick="setFilter('offline')" id="filter-offline" class="px-2.5 py-1 rounded bg-space-bg hover:bg-space-subPanel text-slate-300 border border-transparent transition">异常/失联 (<span id="count-offline">0</span>)</button>
       </div>
 
-      <!-- 搜索框与 Demo 开关 -->
+      <!-- 搜索与模拟开关 -->
       <div class="flex items-center gap-3">
         <div class="relative">
-          <input type="text" id="search-input" oninput="renderCluster()" placeholder="搜索机器名 / IP..." class="bg-[#0b1020] border border-slate-700 text-xs text-white rounded px-3 py-1.5 pl-8 focus:outline-none focus:border-cyan-400 w-44 md:w-56 transition">
-          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <input type="text" id="search-input" oninput="renderCluster()" placeholder="搜索节点名 / IP..." class="bg-space-bg border border-space-border text-xs text-white rounded px-3 py-1.5 pl-8 focus:outline-none focus:border-sky-400 w-44 md:w-56 font-mono transition">
+          <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
 
-        <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-400 select-none">
-          <input type="checkbox" id="mock-toggle" onchange="toggleMockData(this.checked)" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
-          <span>DEMO 模拟集群</span>
+        <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-400 select-none font-mono">
+          <input type="checkbox" id="mock-toggle" onchange="toggleMockData(this.checked)" class="rounded bg-space-bg border-space-border text-sky-500 focus:ring-0">
+          <span>DEMO CLUSTER</span>
         </label>
       </div>
     </div>
 
-    <!-- 节点卡片矩阵 Grid -->
-    <div id="miners-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    <!-- 节点网格 Matrix -->
+    <div id="miners-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <!-- 动态插入各个 Miner 卡片 -->
     </div>
 
-    <!-- 空数据提示状态 -->
-    <div id="empty-state" class="hidden text-center py-20 border border-dashed border-slate-800 rounded-xl bg-slate-950/40">
-      <div class="w-12 h-12 mx-auto mb-3 flex items-center justify-center rounded-full bg-cyan-950/40 text-cyan-400 border border-cyan-500/20">
+    <!-- 空数据状态 -->
+    <div id="empty-state" class="hidden text-center py-20 border border-dashed border-space-border rounded-lg bg-space-panel/30">
+      <div class="w-12 h-12 mx-auto mb-3 flex items-center justify-center rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
         </svg>
       </div>
-      <h3 class="text-base font-orbitron font-semibold text-slate-300">NO ACTIVE MINER NODES FOUND</h3>
-      <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">尚未探测到任何在线上报的 Watchdog 数据。请确保机器已开启上报，或勾选右上角 "DEMO 模拟集群" 预览视觉效果。</p>
+      <h3 class="text-base font-display font-bold text-slate-200">NO TELEMETRY SIGNALS DETECTED</h3>
+      <p class="text-xs text-slate-500 font-mono mt-1 max-w-md mx-auto">尚未探测到任何在线上报的 Watchdog 数据。请确保矿工 Watchdog 客户端正常运行，或勾选右上角 "DEMO CLUSTER" 预览遥测视图。</p>
       <div class="mt-4 flex justify-center gap-3">
-        <button onclick="document.getElementById('mock-toggle').click()" class="cyber-btn bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 px-4 py-1.5 text-xs font-semibold">
+        <button onclick="document.getElementById('mock-toggle').click()" class="space-btn bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 px-4 py-1.5 text-xs font-semibold font-mono">
           LOAD DEMO DATA
         </button>
-        <button onclick="toggleSettingsModal(true)" class="cyber-btn bg-slate-800 border border-slate-700 text-slate-300 px-4 py-1.5 text-xs">
-          CHECK REPO CONFIG
+        <button onclick="toggleSettingsModal(true)" class="space-btn bg-space-bg border border-space-border text-slate-300 px-4 py-1.5 text-xs font-mono">
+          CONFIG REPO
         </button>
       </div>
     </div>
@@ -310,61 +282,63 @@
   </main>
 
   <!-- 底部 Footer -->
-  <footer class="mt-auto border-t border-cyber-border py-4 text-center text-xs text-slate-600 bg-[#04060d]">
-    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        <span>IOTA Train-at-Home Cluster Monitor</span>
+  <footer class="mt-auto border-t border-space-border py-4 text-xs text-slate-500 bg-[#07090e]">
+    <div class="max-w-7xl mx-auto px-4 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2 font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span>IOTA Train-at-Home Mission Control</span>
+        <span class="text-slate-700">|</span>
+        <span class="text-slate-500">Autonomous Neural Training Sentinel</span>
       </div>
       <div id="footer-time" class="font-mono text-[11px] text-slate-500">
-        SYSTEM TIME: --:--:--
+        TIME: --:--:--
       </div>
     </div>
   </footer>
 
   <!-- 设置模态窗 (CONFIG MODAL) -->
   <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="cyber-card w-full max-w-lg p-6 bg-[#090f1d] border-cyan-500/50 shadow-2xl">
-      <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-800">
-        <h3 class="font-orbitron font-bold text-lg text-white flex items-center gap-2">
-          <span class="w-2.5 h-2.5 bg-cyan-400 rounded-sm"></span>
-          CLUSTER REPOSITORY CONFIG
+    <div class="space-panel w-full max-w-lg p-6 bg-space-panel border-space-border shadow-2xl">
+      <div class="flex justify-between items-center mb-5 pb-3 border-b border-space-border">
+        <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+          <span class="w-2 h-2 bg-sky-400 rounded-sm"></span>
+          CLUSTER TELEMETRY CONFIGURATION
         </h3>
-        <button onclick="toggleSettingsModal(false)" class="text-slate-400 hover:text-white">✕</button>
+        <button onclick="toggleSettingsModal(false)" class="text-slate-400 hover:text-white font-mono">✕</button>
       </div>
 
-      <div class="space-y-4 text-xs">
+      <div class="space-y-4 text-xs font-mono">
         <div>
           <label class="block text-slate-300 font-semibold mb-1">GitHub Owner / Repo</label>
-          <input type="text" id="cfg-repo" value="oakvillechen/iota-train-at-home-watchdog" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
+          <input type="text" id="cfg-repo" value="oakvillechen/iota-train-at-home-watchdog" class="w-full bg-space-bg border border-space-border rounded px-3 py-2 text-white focus:outline-none focus:border-sky-400">
           <p class="text-[11px] text-slate-500 mt-1">例如: oakvillechen/iota-train-at-home-watchdog</p>
         </div>
 
         <div>
           <label class="block text-slate-300 font-semibold mb-1">Git Branch / 分支</label>
-          <input type="text" id="cfg-branch" value="main" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
-          <p class="text-[11px] text-slate-500 mt-1">存放 data/*.json 的分支，通常为 main 或 gh-pages</p>
+          <input type="text" id="cfg-branch" value="main" class="w-full bg-space-bg border border-space-border rounded px-3 py-2 text-white focus:outline-none focus:border-sky-400">
+          <p class="text-[11px] text-slate-500 mt-1">存放 data/*.json 的分支，通常为 main</p>
         </div>
 
         <div>
           <label class="block text-slate-300 font-semibold mb-1">GitHub Personal Access Token (可选)</label>
-          <input type="password" id="cfg-token" placeholder="github_pat_xxxx 或留空" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
-          <p class="text-[11px] text-slate-500 mt-1">如果是私有仓库(Private)必填；公开仓库(Public)无需填写也可读取。</p>
+          <input type="password" id="cfg-token" placeholder="github_pat_xxxx 或留空" class="w-full bg-space-bg border border-space-border rounded px-3 py-2 text-white focus:outline-none focus:border-sky-400">
+          <p class="text-[11px] text-slate-500 mt-1">公开仓库无需填 token；若有匿名限额建议填写以提升速率。</p>
         </div>
 
         <div>
           <label class="block text-slate-300 font-semibold mb-1">自动刷新间隔 (秒)</label>
-          <select id="cfg-interval" class="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono">
-            <option value="15">15 秒 (极速)</option>
-            <option value="30" selected>30 秒 (推荐)</option>
-            <option value="60">60 秒 (节能)</option>
+          <select id="cfg-interval" class="w-full bg-space-bg border border-space-border rounded px-3 py-2 text-white focus:outline-none focus:border-sky-400">
+            <option value="15">15 秒 (高频遥测)</option>
+            <option value="30" selected>30 秒 (标准控制台)</option>
+            <option value="60">60 秒 (低频节能)</option>
           </select>
         </div>
       </div>
 
-      <div class="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-800">
-        <button onclick="toggleSettingsModal(false)" class="px-4 py-2 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold">取消</button>
-        <button onclick="saveSettings()" class="cyber-btn bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-2 text-xs font-bold tracking-wider">保存配置</button>
+      <div class="mt-6 flex justify-end gap-3 pt-3 border-t border-space-border">
+        <button onclick="toggleSettingsModal(false)" class="px-4 py-2 rounded bg-space-bg border border-space-border text-slate-300 hover:bg-space-subPanel text-xs font-mono font-medium">取消</button>
+        <button onclick="saveSettings()" class="space-btn bg-sky-500 hover:bg-sky-400 text-black px-5 py-2 text-xs font-mono font-bold tracking-wider">保存并同步</button>
       </div>
     </div>
   </div>
@@ -382,11 +356,10 @@
     let minersData = [];
     let currentFilter = 'all';
     let countdownSec = 30;
-    let refreshTimer = null;
     let countdownInterval = null;
     let isMockMode = false;
 
-    // 默认内置的赛博模拟数据（演示与未连通时兜底体验）
+    // 默认内置演示数据
     const DEMO_MINERS = [
       {
         worker_id: "mac-studio-m2-max",
@@ -394,17 +367,27 @@
         ip: "192.168.1.101",
         updated_at: Math.floor(Date.now() / 1000) - 25,
         status: "training",
-        phase: "训练中 (第 3 层 / Layer 3)",
+        phase: "活跃训练中 (Layer 2)",
         proc_running: true,
         queue_pos: 0,
-        upload_speed: "24.8 Mbps",
-        download_speed: "68.2 Mbps",
-        speedtest_time: "14:05",
-        peers_count: 8,
+        run_id: "4.12.16.20-tah",
+        layer: "Layer 2",
+        epoch: "Epoch 72",
+        upload_speed: "28.5 Mbps",
+        download_speed: "145.2 Mbps",
+        speedtest_time: "17:05",
+        peers_count: 14,
         restart_count: 0,
-        recent_tokens: "24.8万",
-        cycle_tokens: "128.5万",
-        last_log: "[14:15:30] Layer 3 gradient exchange with 8 peers synced in 412ms"
+        recent_tokens: "166.5万",
+        hourly_tokens: [
+          { range: "14:00~14:59", tokens: "28.98万", is_current: false },
+          { range: "15:00~15:59", tokens: "27.42万", is_current: false },
+          { range: "16:00~16:59", tokens: "32.71万", is_current: false },
+          { range: "17:00~17:07", tokens: "26.89万", is_current: true }
+        ],
+        last_payout: { amount_str: "2.458 Alpha", time_str: "09-29 20:24 EDT", status: "已结算" },
+        next_payout: { time_str: "09-30 20:00 EDT", timestamp: Math.floor(Date.now() / 1000) + 10100 },
+        last_log: "[2026-09-30 17:07:15.457] [Info] Subnet model update: synced 2.92GB with 14 peers"
       },
       {
         worker_id: "mbp-m3-pro-office",
@@ -415,49 +398,47 @@
         phase: "排队保护中 (队列第 2 位)",
         proc_running: true,
         queue_pos: 2,
+        run_id: "4.12.16.20-tah",
+        layer: "Layer 2",
+        epoch: "Epoch 72",
         upload_speed: "18.2 Mbps",
-        download_speed: "45.0 Mbps",
-        speedtest_time: "14:02",
-        peers_count: 6,
+        download_speed: "88.0 Mbps",
+        speedtest_time: "16:58",
+        peers_count: 11,
         restart_count: 1,
-        recent_tokens: "16.2万",
-        cycle_tokens: "85.2万",
-        last_log: "[14:14:10] Queue position confirmed: #2. Automatic restart suppressed."
-      },
-      {
-        worker_id: "mini-m4-livingroom",
-        worker_name: "Mac Mini M4 (Node 03)",
-        ip: "192.168.1.112",
-        updated_at: Math.floor(Date.now() / 1000) - 95,
-        status: "training",
-        phase: "训练中 (第 4 层 / Layer 4)",
-        proc_running: true,
-        queue_pos: 0,
-        upload_speed: "15.6 Mbps",
-        download_speed: "32.1 Mbps",
-        speedtest_time: "13:58",
-        peers_count: 7,
-        restart_count: 0,
-        recent_tokens: "19.7万",
-        cycle_tokens: "102.1万",
-        last_log: "[14:13:45] Gradient broadcast chunk #142 verified by peer mesh"
+        recent_tokens: "95.4万",
+        hourly_tokens: [
+          { range: "14:00~14:59", tokens: "21.20万", is_current: false },
+          { range: "15:00~15:59", tokens: "19.80万", is_current: false },
+          { range: "16:00~16:59", tokens: "24.10万", is_current: false },
+          { range: "17:00~17:07", tokens: "18.30万", is_current: true }
+        ],
+        last_payout: { amount_str: "1.890 Alpha", time_str: "09-29 20:24 EDT", status: "已结算" },
+        next_payout: { time_str: "09-30 20:00 EDT", timestamp: Math.floor(Date.now() / 1000) + 10100 },
+        last_log: "[2026-09-30 17:06:55.102] [Info] Node registered in queue pos #2. Standby."
       }
     ];
 
-    // ================= 初始化与设置 =================
+    // ================= 初始化 =================
     function init() {
       loadStoredConfig();
       document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
       
-      // 更新系统时间
-      setInterval(() => {
-        const now = new Date();
-        document.getElementById("footer-time").innerText = `SYSTEM TIME: ${now.toLocaleTimeString()} UTC${now.getTimezoneOffset() <= 0 ? '+' : ''}${-now.getTimezoneOffset()/60}`;
-      }, 1000);
+      // 时钟驱动 (UTC + Local)
+      updateClock();
+      setInterval(updateClock, 1000);
 
-      // 启动轮询
+      // 启动同步
       startSyncCountdown();
       fetchClusterData();
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const utcStr = now.toISOString().substring(11, 19) + " UTC";
+      const localStr = now.toLocaleTimeString();
+      document.getElementById("mission-clock").innerText = `${utcStr} | ${localStr}`;
+      document.getElementById("footer-time").innerText = `LOCAL: ${localStr} (${Intl.DateTimeFormat().resolvedOptions().timeZone || 'EDT'})`;
     }
 
     function loadStoredConfig() {
@@ -505,7 +486,7 @@
       }
     }
 
-    // ================= 自动刷新与倒计时 =================
+    // ================= 刷新倒计时 =================
     function startSyncCountdown() {
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
@@ -527,12 +508,12 @@
       fetchClusterData();
     }
 
-    // ================= 核心数据拉取 =================
+    // ================= 数据拉取 =================
     async function fetchClusterData() {
       if (isMockMode) {
         minersData = DEMO_MINERS.map(m => ({
           ...m,
-          updated_at: Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 60)
+          updated_at: Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 40)
         }));
         renderCluster();
         return;
@@ -560,7 +541,6 @@
 
             const fetchPromises = validFiles.map(async f => {
               try {
-                // 1. 优先使用 Git Blob API 以 raw 模式拉取最新内容 (天然绑定 blob sha，零 CDN 缓存延迟)
                 if (f.git_url) {
                   const blobHeaders = { "Accept": "application/vnd.github.raw+json" };
                   if (appConfig.token) {
@@ -569,12 +549,10 @@
                   const bRes = await fetch(f.git_url, { headers: blobHeaders });
                   if (bRes.ok) return await bRes.json();
                 }
-                // 2. 备用：加时间戳参数以破除 raw.githubusercontent.com 缓存
                 const rawUrl = `${f.download_url}?_t=${Date.now()}`;
                 const rRes = await fetch(rawUrl);
                 if (rRes.ok) return await rRes.json();
               } catch (e) {
-                console.warn("读取节点数据失败:", f.name, e);
                 return null;
               }
             });
@@ -582,7 +560,7 @@
             nodes = results.filter(Boolean);
           }
         } else {
-          // 备用链路：当 GitHub API 达到匿名限额 (403) 时，直接读取 cluster_manifest.json 列表 (零 API 额度消耗，支持无上限访客并发)
+          // GitHub API 403 备用通道：读取 cluster_manifest.json
           try {
             const manifestUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/cluster_manifest.json?_t=${Date.now()}`;
             const mRes = await fetch(manifestUrl);
@@ -609,15 +587,15 @@
       renderCluster();
     }
 
-    // ================= 界面渲染与统计 =================
+    // ================= 渲染与统计 =================
     function setFilter(filter) {
       currentFilter = filter;
       ['all', 'active', 'queue', 'offline'].forEach(f => {
         const btn = document.getElementById(`filter-${f}`);
         if (f === filter) {
-          btn.className = "px-3 py-1 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold transition";
+          btn.className = "px-2.5 py-1 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-medium transition";
         } else {
-          btn.className = "px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-transparent transition";
+          btn.className = "px-2.5 py-1 rounded bg-space-bg hover:bg-space-subPanel text-slate-300 border border-transparent transition";
         }
       });
       renderCluster();
@@ -627,7 +605,6 @@
       const now = Math.floor(Date.now() / 1000);
       const searchTxt = document.getElementById("search-input").value.toLowerCase().trim();
 
-      // 统计指标
       let onlineCount = 0;
       let activeCount = 0;
       let queueCount = 0;
@@ -639,10 +616,7 @@
 
       const processedMiners = minersData.map(m => {
         const lastSeenAgo = now - (m.updated_at || 0);
-        // 超时判定优化：
-        // 1. 如果 proc_running 为 false，则节点进程停止 (OFFLINE)
-        // 2. 如果超过 8 分钟 (480秒) 无心跳，判定为完全失联/离线 (OFFLINE)
-        // 3. 如果在 3~8 分钟无新心跳，判定为网络同步延迟 (SYNC DELAY，黄色提示，不判定为离线)
+        // 超时判定：超过 8 分钟或进程停止为离线；3~8分钟为信号延迟
         const isOffline = !m.proc_running || lastSeenAgo > 480;
         const isStale = !isOffline && lastSeenAgo > 180;
         
@@ -660,13 +634,11 @@
           onlineCount++;
         }
 
-        // 解析 Token 数值 (支持 "18.5万" 或纯数字)
         if (m.recent_tokens) {
           const tVal = parseFloat(m.recent_tokens);
           if (!isNaN(tVal)) totalTokensNum += tVal;
         }
 
-        // 解析网速
         if (m.upload_speed) {
           const upVal = parseFloat(m.upload_speed);
           if (!isNaN(upVal)) {
@@ -688,14 +660,16 @@
         };
       });
 
-      // 更新 HUD 统计
+      // 更新顶部统计面板
       const totalNodes = minersData.length;
       document.getElementById("stat-online-nodes").innerText = onlineCount;
       document.getElementById("stat-total-nodes").innerText = totalNodes;
-      document.getElementById("stat-nodes-bar").style.width = totalNodes > 0 ? `${(onlineCount / totalNodes) * 100}%` : '0%';
+      
+      const pct = totalNodes > 0 ? Math.round((onlineCount / totalNodes) * 100) : 100;
+      document.getElementById("stat-nodes-bar").style.width = `${pct}%`;
+      document.getElementById("stat-nodes-pct").innerText = `${pct}%`;
 
       document.getElementById("stat-total-tokens").innerText = totalTokensNum > 0 ? `${totalTokensNum.toFixed(1)}W` : "--";
-      
       document.getElementById("stat-avg-up").innerText = speedCount > 0 ? `${(totalUpSpeed / speedCount).toFixed(1)}M` : "--";
       document.getElementById("stat-avg-down").innerText = speedCount > 0 ? `${(totalDownSpeed / speedCount).toFixed(1)}M` : "--";
 
@@ -705,24 +679,24 @@
       const alertCountTxt = document.getElementById("stat-alert-count");
 
       if (offlineCount > 0) {
-        alertDot.className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
-        alertStatus.className = "mt-2 text-[11px] text-rose-400 font-semibold truncate";
-        alertStatus.innerText = `${offlineCount} NODE(S) REQUIRES ATTENTION`;
-        alertCountTxt.className = "text-3xl font-orbitron font-bold text-rose-500 tracking-wider";
+        alertDot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
+        alertStatus.className = "mt-3 text-[11px] text-red-400 font-mono font-medium truncate";
+        alertStatus.innerText = `${offlineCount} NODE(S) REQUIRE ATTENTION`;
+        alertCountTxt.className = "text-3xl font-display font-bold text-red-500 tracking-tight";
       } else {
         alertDot.className = "w-2 h-2 rounded-full bg-emerald-400";
-        alertStatus.className = "mt-2 text-[11px] text-emerald-400 font-medium truncate";
-        alertStatus.innerText = "ALL NODES NOMINAL";
-        alertCountTxt.className = "text-3xl font-orbitron font-bold text-emerald-400 tracking-wider";
+        alertStatus.className = "mt-3 text-[11px] text-emerald-400 font-mono font-medium truncate";
+        alertStatus.innerText = "ALL SYSTEMS NOMINAL";
+        alertCountTxt.className = "text-3xl font-display font-bold text-emerald-400 tracking-tight";
       }
 
-      // 更新过滤计数
+      // 计数器
       document.getElementById("count-all").innerText = totalNodes;
       document.getElementById("count-active").innerText = activeCount;
       document.getElementById("count-queue").innerText = queueCount;
       document.getElementById("count-offline").innerText = offlineCount;
 
-      // 过滤与搜索
+      // 过滤
       const filtered = processedMiners.filter(m => {
         if (currentFilter !== 'all' && m.statusCategory !== currentFilter) return false;
         if (searchTxt) {
@@ -744,80 +718,73 @@
       }
 
       emptyState.classList.add("hidden");
-
-      // 渲染卡片
-      grid.innerHTML = filtered.map(m => renderMinerCard(m)).join("");
+      grid.innerHTML = filtered.map(m => renderSpaceNodeCard(m)).join("");
     }
 
-    function renderMinerCard(m) {
+    // ================= SpaceX 风格单个节点遥测卡片 =================
+    function renderSpaceNodeCard(m) {
       const isOff = m.isOffline;
       const isStale = m.isStale;
       const isQueue = m.statusCategory === 'queue';
 
       let statusBadge = "";
-      let borderColorClass = "border-cyan-500/20";
-      let pulseGlowClass = "bg-emerald-400 shadow-cyber-green";
+      let borderClass = "border-space-border";
 
       if (isOff) {
-        borderColorClass = "status-error border-rose-500/40";
-        pulseGlowClass = "bg-rose-500 shadow-cyber-red animate-ping";
-        const offReason = !m.proc_running ? "PROCESS STOPPED / 进程停止" : "OFFLINE / 心跳超时";
+        borderClass = "border-red-500/50";
+        const offReason = !m.proc_running ? "PROCESS STOPPED" : "OFFLINE";
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-rose-300 text-[10px] font-bold tracking-widest uppercase">
-            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-red-950/80 border border-red-500/60 text-red-400 text-xs font-mono font-semibold tracking-wide">
+            <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
             ${offReason}
           </span>
         `;
       } else if (isStale) {
-        borderColorClass = "border-amber-500/30";
-        pulseGlowClass = "bg-amber-400 shadow-cyber-amber";
+        borderClass = "border-amber-500/40";
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold tracking-widest uppercase">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-950/80 border border-amber-500/60 text-amber-300 text-xs font-mono font-semibold tracking-wide">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            SYNC DELAY / 信号延迟
+            SYNC DELAY
           </span>
         `;
       } else if (isQueue) {
-        pulseGlowClass = "bg-amber-400 shadow-cyber-amber";
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold tracking-widest uppercase">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-950/80 border border-amber-500/60 text-amber-300 text-xs font-mono font-semibold tracking-wide">
             <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            QUEUEING (第${m.queue_pos}位)
+            STANDBY QUEUE (#${m.queue_pos})
           </span>
         `;
       } else {
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold tracking-widest uppercase">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-cyber-green animate-pulse"></span>
-            TRAINING ACTIVE
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs font-mono font-semibold tracking-wide">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            NOMINAL // TRAINING
           </span>
         `;
       }
 
-      // 时间换算
+      // 计算时间
       const safeAgo = Math.max(0, m.lastSeenAgo || 0);
       const minsAgo = Math.floor(safeAgo / 60);
       const secsAgo = safeAgo % 60;
       let timeAgoStr = "刚刚";
-      if (minsAgo > 0) {
-        timeAgoStr = `${minsAgo}分${secsAgo}秒前`;
-      } else if (secsAgo > 5) {
-        timeAgoStr = `${secsAgo}秒前`;
-      }
+      if (minsAgo > 0) timeAgoStr = `${minsAgo}分${secsAgo}秒前`;
+      else if (secsAgo > 5) timeAgoStr = `${secsAgo}秒前`;
 
       return `
-        <div class="cyber-card ${borderColorClass} p-5 flex flex-col justify-between group">
+        <div class="space-panel ${borderClass} p-5 flex flex-col justify-between">
           <div>
-            <!-- 头部：机器名 + IP + 状态徽章 -->
-            <div class="flex items-start justify-between gap-2 mb-2.5">
+            
+            <!-- 头部：机器名称、IP与状态徽章 -->
+            <div class="flex items-start justify-between gap-3 mb-3.5">
               <div>
-                <h3 class="font-orbitron font-bold text-base text-white group-hover:text-cyan-400 transition-colors flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full ${pulseGlowClass}"></span>
+                <h3 class="font-display font-bold text-lg text-white tracking-wide flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full ${isOff ? 'bg-red-500' : 'bg-emerald-400'}"></span>
                   ${escapeHtml(m.worker_name || m.worker_id)}
                 </h3>
-                <div class="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
-                  <span>ID: ${escapeHtml(m.worker_id)}</span>
-                  ${m.ip ? `<span class="text-slate-600">|</span><span>${escapeHtml(m.ip)}</span>` : ''}
+                <div class="text-xs text-slate-400 font-mono mt-1 flex items-center gap-2">
+                  <span class="text-slate-300">ID: ${escapeHtml(m.worker_id)}</span>
+                  ${m.ip ? `<span class="text-slate-600">|</span><span class="text-slate-400">IP: ${escapeHtml(m.ip)}</span>` : ''}
                 </div>
               </div>
               <div class="shrink-0">
@@ -825,141 +792,142 @@
               </div>
             </div>
 
-            <!-- 关键训练元数据标签 Strip: Run ID, Layer, Epoch -->
-            <div class="flex flex-wrap items-center gap-1.5 mb-3 text-[11px] font-mono">
-              <div class="px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 flex items-center gap-1">
-                <span class="text-[9px] text-cyan-500 font-bold uppercase font-rajdhani">RUN</span>
-                <span class="font-bold">${escapeHtml(m.run_id || '--')}</span>
+            <!-- 任务核心参数条 (RUN / LAYER / EPOCH) -->
+            <div class="grid grid-cols-3 gap-2 mb-3.5 font-mono text-xs">
+              <div class="bg-space-bg px-2.5 py-1.5 rounded border border-space-border flex flex-col">
+                <span class="text-[10px] text-slate-500 font-medium">RUN ID</span>
+                <span class="font-semibold text-slate-200 truncate mt-0.5">${escapeHtml(m.run_id || '--')}</span>
               </div>
-              <div class="px-2 py-0.5 rounded bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 flex items-center gap-1">
-                <span class="text-[9px] text-indigo-400 font-bold uppercase font-rajdhani">LAYER</span>
-                <span class="font-bold">${escapeHtml(m.layer || '--')}</span>
+              <div class="bg-space-bg px-2.5 py-1.5 rounded border border-space-border flex flex-col">
+                <span class="text-[10px] text-slate-500 font-medium">STAGE / LAYER</span>
+                <span class="font-semibold text-sky-400 truncate mt-0.5">${escapeHtml(m.layer || '--')}</span>
               </div>
-              <div class="px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800/60 text-emerald-300 flex items-center gap-1">
-                <span class="text-[9px] text-emerald-400 font-bold uppercase font-rajdhani">EPOCH</span>
-                <span class="font-bold">${escapeHtml(m.epoch || '--')}</span>
+              <div class="bg-space-bg px-2.5 py-1.5 rounded border border-space-border flex flex-col">
+                <span class="text-[10px] text-slate-500 font-medium">EPOCH</span>
+                <span class="font-semibold text-emerald-400 truncate mt-0.5">${escapeHtml(m.epoch || '--')}</span>
               </div>
             </div>
 
-            <!-- 当前阶段 Phase Banner -->
-            <div class="bg-black/50 border border-slate-800/80 rounded px-3 py-2 mb-3 flex items-center justify-between text-xs">
-              <span class="text-slate-400 text-[11px] font-rajdhani uppercase tracking-wider">PHASE:</span>
-              <span class="font-semibold ${isOff ? 'text-rose-400' : (isQueue ? 'text-amber-300' : 'text-cyan-300')} truncate ml-2">
+            <!-- 当前训练阶段 Phase -->
+            <div class="bg-space-bg border border-space-border rounded px-3 py-2 mb-3.5 flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-500 text-[11px]">ACTIVE PHASE:</span>
+              <span class="font-semibold ${isOff ? 'text-red-400' : 'text-slate-200'} truncate ml-2">
                 ${escapeHtml(m.phase || (m.proc_running ? '正常运行中' : '进程未启动'))}
               </span>
             </div>
 
-            <!-- 最近 3~4 个小时有效贡献 (每个小时明细展示) -->
-            <div class="bg-slate-900/80 rounded p-2.5 border border-slate-800 mb-3">
-              <div class="text-[10px] text-slate-400 font-rajdhani uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>HOURLY CONTRIBUTIONS (近 3 小时有效贡献明细)</span>
+            <!-- 最近 3~4 小时有效贡献明细卡片 -->
+            <div class="bg-space-bg rounded p-3 border border-space-border mb-3.5">
+              <div class="text-[11px] font-mono text-slate-400 uppercase tracking-wide mb-2.5 flex items-center justify-between">
+                <span class="flex items-center gap-1.5 text-slate-300 font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span>HOURLY TOKEN PRODUCTION (近 3~4 小时贡献)</span>
                 </span>
-                <span class="text-emerald-400 font-mono font-bold">${escapeHtml(m.recent_tokens || '--')} 6H SUM</span>
+                <span class="text-emerald-400 font-bold">${escapeHtml(m.recent_tokens || '--')} TOTAL</span>
               </div>
-              ${renderHourlyTokens(m.hourly_tokens)}
+              ${renderSpaceHourlyTokens(m.hourly_tokens)}
             </div>
 
-            <!-- 结算状态 Strip: 最近一次结算记录 + 下一次结算时间 -->
-            <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
+            <!-- 结算记录与倒计时 (SpaceX 风格 T- 倒计时) -->
+            <div class="grid grid-cols-2 gap-2 mb-3.5 text-xs font-mono">
               <!-- 最近一次结算 -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
-                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
+              <div class="bg-space-bg p-2.5 rounded border border-space-border flex flex-col justify-between">
+                <div class="text-[10px] text-slate-500 uppercase flex items-center justify-between">
                   <span>LAST PAYOUT 结算记录</span>
-                  <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/50">${escapeHtml(m.last_payout?.status || '已结算')}</span>
+                  <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40">已入账</span>
                 </div>
-                <div class="text-sm font-orbitron font-bold text-emerald-400 mt-1">
+                <div class="text-base font-display font-bold text-emerald-400 mt-1">
                   ${escapeHtml(m.last_payout?.amount_str || (m.last_payout?.amount ? m.last_payout.amount + ' Alpha' : '--'))}
                 </div>
-                <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                <div class="text-[10px] text-slate-500 mt-0.5 truncate">
                   ${escapeHtml(m.last_payout?.time_str || '--')}
                 </div>
               </div>
 
-              <!-- 下一次结算时间 -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
-                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
+              <!-- 下次结算倒计时 (T- MINUS) -->
+              <div class="bg-space-bg p-2.5 rounded border border-space-border flex flex-col justify-between">
+                <div class="text-[10px] text-slate-500 uppercase flex items-center justify-between">
                   <span>NEXT PAYOUT 下次结算</span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                  <span class="text-sky-400 font-bold">20:00 EDT</span>
                 </div>
-                <div class="text-sm font-orbitron font-bold text-cyan-300 mt-1">
-                  ${escapeHtml(m.next_payout?.time_str || '20:00 EDT')}
+                <div class="text-base font-display font-bold text-sky-300 mt-1">
+                  ${renderSpaceNextPayoutCountdown(m.next_payout?.timestamp)}
                 </div>
-                <div class="text-[10px] text-cyan-400 font-mono mt-0.5 truncate">
-                  ${renderNextPayoutCountdown(m.next_payout?.timestamp)}
-                </div>
-              </div>
-            </div>
-
-            <!-- 网络与测速指标 (2 列) -->
-            <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
-              <!-- P2P 活跃邻居 -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800">
-                <div class="text-[10px] text-slate-400 font-rajdhani uppercase">PEER MESH</div>
-                <div class="text-sm font-orbitron font-bold text-cyan-300 mt-0.5 flex items-center gap-1.5">
-                  <span>${m.peers_count !== undefined ? m.peers_count : '--'} PEERS</span>
-                  <span class="text-[10px] text-slate-500 font-normal">CONNECTED</span>
-                </div>
-              </div>
-
-              <!-- 测速网速 (上行 / 下行) -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
-                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
-                  <span>SPEEDTEST</span>
-                  ${m.speedtest_time ? `<span class="text-[9px] text-slate-500 font-mono">${escapeHtml(m.speedtest_time)}</span>` : ''}
-                </div>
-                <div class="text-xs font-mono font-medium text-slate-200 mt-0.5 flex items-center gap-2">
-                  <span class="text-cyan-300">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
-                  <span class="text-indigo-300">⬇ ${escapeHtml(m.download_speed || '--')}</span>
+                <div class="text-[10px] text-slate-500 mt-0.5 truncate">
+                  ${escapeHtml(m.next_payout?.time_str || '今日 20:00 EDT')}
                 </div>
               </div>
             </div>
 
-            <!-- 终端日志微型面板 (Cyber Terminal Strip) -->
-            <div class="mb-3">
-              <div class="text-[10px] text-slate-500 font-rajdhani uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>LATEST LOG TELEMETRY</span>
-                <span>TAIL -1</span>
+            <!-- 网络测速与 P2P 邻居 -->
+            <div class="grid grid-cols-2 gap-2 mb-3.5 text-xs font-mono">
+              <div class="bg-space-bg p-2.5 rounded border border-space-border flex items-center justify-between">
+                <div>
+                  <div class="text-[10px] text-slate-500 uppercase">PEER SWARM</div>
+                  <div class="text-sm font-display font-bold text-white mt-0.5">
+                    ${m.peers_count !== undefined ? m.peers_count : '--'} <span class="text-xs text-slate-400 font-normal">NODES</span>
+                  </div>
+                </div>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
               </div>
-              <div class="bg-[#03060f] p-2.5 rounded border border-cyan-950 text-[11px] font-mono text-cyan-400/90 leading-relaxed break-all max-h-16 overflow-y-auto selection:bg-cyan-500 selection:text-black">
-                ${escapeHtml(m.last_log || "等待最新控制台输出...")}
+
+              <div class="bg-space-bg p-2.5 rounded border border-space-border">
+                <div class="text-[10px] text-slate-500 uppercase flex items-center justify-between">
+                  <span>THROUGHPUT</span>
+                  ${m.speedtest_time ? `<span class="text-[9px] text-slate-500">${escapeHtml(m.speedtest_time)}</span>` : ''}
+                </div>
+                <div class="text-xs font-mono font-medium text-slate-200 mt-1 flex items-center gap-2.5">
+                  <span class="text-sky-400">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
+                  <span class="text-indigo-400">⬇ ${escapeHtml(m.download_speed || '--')}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 终端日志控制台 (SpaceX Console Strip) -->
+            <div class="mb-3.5">
+              <div class="text-[10px] text-slate-500 font-mono uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>CONSOLE TELEMETRY</span>
+                <span>STREAM: STDOUT/TAIL</span>
+              </div>
+              <div class="bg-[#04060b] p-2.5 rounded border border-space-border font-mono text-[11px] text-slate-300 leading-relaxed break-all max-h-16 overflow-y-auto selection:bg-sky-500 selection:text-black">
+                ${escapeHtml(m.last_log || "等待最新遥测输出...")}
               </div>
             </div>
 
           </div>
 
-          <!-- 底部心跳时间与状态条 -->
-          <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+          <!-- 底部遥测同步时间 -->
+          <div class="pt-3 border-t border-space-border flex items-center justify-between text-xs font-mono text-slate-400">
             <div class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full ${isOff ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
-              <span>心跳: <span class="${isOff ? 'text-rose-400 font-bold' : 'text-slate-300'}">${timeAgoStr}</span></span>
+              <span class="w-1.5 h-1.5 rounded-full ${isOff ? 'bg-red-500' : 'bg-emerald-400'}"></span>
+              <span>HEARTBEAT: <span class="${isOff ? 'text-red-400 font-bold' : 'text-slate-300'}">${timeAgoStr}</span></span>
             </div>
             <div>
-              重启: <span class="text-slate-300 font-mono">${m.restart_count || 0}</span> 次
+              AUTO-RESTARTS: <span class="text-slate-300 font-bold">${m.restart_count || 0}</span>
             </div>
           </div>
         </div>
       `;
     }
 
-    function renderHourlyTokens(hourlyList) {
+    // 小时细分卡片
+    function renderSpaceHourlyTokens(hourlyList) {
       if (!Array.isArray(hourlyList) || hourlyList.length === 0) {
         return `
-          <div class="text-[11px] text-slate-500 font-mono py-1 text-center">
-            暂无小时细分数据（等待链上统计采集...）
+          <div class="text-xs text-slate-500 font-mono py-2 text-center">
+            暂无小时细分数据（等待矿工周期统计刷新...）
           </div>
         `;
       }
       return `
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
           ${hourlyList.map(h => `
-            <div class="bg-black/40 px-2 py-1.5 rounded border ${h.is_current ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-slate-800/80'} text-center">
-              <div class="text-[9px] font-mono text-slate-400 flex items-center justify-center gap-1">
-                ${h.is_current ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>' : ''}
+            <div class="bg-space-panel px-2.5 py-2 rounded border ${h.is_current ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-space-border'} text-center font-mono">
+              <div class="text-[10px] text-slate-400 flex items-center justify-center gap-1">
+                ${h.is_current ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>' : ''}
                 <span>${escapeHtml(h.range)}</span>
               </div>
-              <div class="text-xs font-orbitron font-bold ${h.is_current ? 'text-emerald-300' : 'text-slate-200'} mt-0.5">
+              <div class="text-sm font-display font-bold ${h.is_current ? 'text-emerald-300' : 'text-white'} mt-1">
                 ${escapeHtml(h.tokens)}
               </div>
             </div>
@@ -968,14 +936,16 @@
       `;
     }
 
-    function renderNextPayoutCountdown(nextTs) {
-      if (!nextTs) return "每日 20:00 结算";
+    // 倒计时 (T- MINUS 格式)
+    function renderSpaceNextPayoutCountdown(nextTs) {
+      if (!nextTs) return "每日 20:00";
       const nowTs = Math.floor(Date.now() / 1000);
       const diff = nextTs - nowTs;
-      if (diff <= 0) return "结算执行中...";
+      if (diff <= 0) return "PAYOUT EXECUTING";
       const hrs = Math.floor(diff / 3600);
       const mins = Math.floor((diff % 3600) / 60);
-      return `倒计时 ${hrs}时${mins}分`;
+      const secs = diff % 60;
+      return `T- ${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
     function escapeHtml(str) {

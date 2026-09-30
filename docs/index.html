@@ -545,9 +545,38 @@
 
     function updateClock() {
       const now = new Date();
+      const nowTs = Math.floor(now.getTime() / 1000);
       const localStr = now.toLocaleTimeString();
       document.getElementById("header-clock").innerText = localStr;
       document.getElementById("footer-time").innerText = `LOCAL: ${localStr} (${Intl.DateTimeFormat().resolvedOptions().timeZone || 'EDT'})`;
+
+      // 1. 实时每秒动态滚动更新结算倒计时 (T- 02:33:10 -> 09 -> 08...)
+      document.querySelectorAll(".payout-countdown-display").forEach(el => {
+        const tsStr = el.getAttribute("data-target-ts");
+        if (tsStr) {
+          const targetTs = parseInt(tsStr, 10);
+          if (!isNaN(targetTs) && targetTs > 0) {
+            el.innerText = renderCleanNextPayoutCountdown(targetTs);
+          }
+        }
+      });
+
+      // 2. 实时每秒动态更新心跳时差 (XX秒前 / XX分XX秒前)
+      document.querySelectorAll(".heartbeat-display").forEach(el => {
+        const tsStr = el.getAttribute("data-updated-ts");
+        if (tsStr) {
+          const updatedTs = parseInt(tsStr, 10);
+          if (!isNaN(updatedTs) && updatedTs > 0) {
+            const safeAgo = Math.max(0, nowTs - updatedTs);
+            const minsAgo = Math.floor(safeAgo / 60);
+            const secsAgo = safeAgo % 60;
+            let str = "刚刚";
+            if (minsAgo > 0) str = `${minsAgo}分${secsAgo}秒前`;
+            else if (secsAgo > 5) str = `${secsAgo}秒前`;
+            el.innerText = str;
+          }
+        }
+      });
     }
 
     function loadStoredConfig() {
@@ -957,13 +986,13 @@
                 </div>
               </div>
 
-              <!-- 下次结算倒计时 (T- 28px) -->
+              <!-- 下次结算倒计时 (T- 28px) 实时秒级滚动 -->
               <div class="bg-[var(--card-sub)] p-3.5 rounded-2xl border border-[var(--border)] flex flex-col justify-between">
                 <div class="text-[11px] text-[var(--ink-3)] uppercase font-medium flex items-center justify-between">
                   <span>NEXT PAYOUT 下次结算</span>
                   <span class="text-[var(--indigo)] font-mono font-semibold text-[11px]">20:00 EDT</span>
                 </div>
-                <div class="text-[26px] font-bold text-[var(--indigo)] font-mono mt-1.5 tracking-tight">
+                <div class="payout-countdown-display text-[26px] font-bold text-[var(--indigo)] font-mono mt-1.5 tracking-tight" data-target-ts="${m.next_payout?.timestamp || ''}">
                   ${renderCleanNextPayoutCountdown(m.next_payout?.timestamp)}
                 </div>
                 <div class="text-[12px] text-[var(--ink-2)] font-mono mt-1 truncate">
@@ -1009,11 +1038,11 @@
 
           </div>
 
-          <!-- 底部心跳时间与自动恢复计数 (13-14px) -->
+          <!-- 底部心跳时间与自动恢复计数 (13-14px) 实时秒级刷新 -->
           <div class="pt-3.5 border-t border-[var(--border)] flex items-center justify-between text-[13px] font-mono text-[var(--ink-2)]">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full ${isOff ? 'bg-[var(--red)]' : 'bg-[var(--green)]'}"></span>
-              <span>心跳: <span class="${isOff ? 'text-[var(--red)] font-bold' : 'text-[var(--ink)] font-semibold'}">${timeAgoStr}</span></span>
+              <span>心跳: <span class="heartbeat-display ${isOff ? 'text-[var(--red)] font-bold' : 'text-[var(--ink)] font-semibold'}" data-updated-ts="${m.updated_at || ''}">${timeAgoStr}</span></span>
             </div>
             <div>
               自动重启: <span class="text-[var(--ink)] font-bold">${m.restart_count || 0}</span> 次

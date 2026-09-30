@@ -6,12 +6,16 @@
 
 ## ✨ Features
 
+- 🧟 **On-Chain Zombie State Detection (P0)**: Correlates local logs with on-chain `token_count` metrics. If local process is running and heartbeats are fresh but on-chain tokens stay flat for >2h while network tokens continue growing, triggers an amber/red warning banner with official guide links and restart advice (alert only, no auto-restart).
+- 📊 **Ground Truth vs. Local Estimate & Live Rank (P0)**: Side-by-side display of on-chain confirmed tokens (`token_count`, ground truth), local forward pass token estimations, real-time miner ranking (e.g. `141/895`), and subnet health trends.
+- 📡 **Orchestrator Allocation & Cache Monitoring (P1)**: Pinpoints miner allocation status (`Waiting for orchestrator` vs `Normal activation stream`), tracks tensor cache size (`Cache 0/16 Empty` vs `16/16 Full`), and monitors `all_layers_training` readiness.
+- ⏳ **Daily 20:00 EDT Settlement Countdown (P1)**: Live countdown to 00:00 UTC / 20:00 EDT settlement cycle with current 24h contribution window delta and permanent payout status glossary (`settled`, `pending`, `forfeit`).
+- 🔄 **Epoch-Aware Diagnostics & Anti-Frequent Restart (P2)**: Tracks current epoch runtime and idle epochs. Warns if restart attempts exceed 2 times within 2 hours, preventing unnecessary initialization delays.
 - 🟢 **Real-Time Queue Tracking**: Instantly parses `/miner/register/status` to show current position, previous position, movement delta (e.g. `⬆ 前进 115 位`), and total wait duration without duplication.
 - ⚡ **Auto-Crash & Freeze Watchdog**: Detects deadlocks, silent log freezes, or process drops and automatically recovers the miner with launch protection cooldowns.
 - ☕ **macOS Anti-Sleep (caffeinate)**: Keeps GPU/MPS and network operations running at full speed when the screen turns off.
-- 📊 **Training & Mesh Metrics**: Tracks real-time P2P peer count, broadcast mesh status, speedtest bandwidth, and Forward / Backward step counts.
 - 🧹 **One-Click Deep Cleanup & Reset**: Safely terminates background processes, wipes corrupt application cache/states/logs without deleting watchdog scripts, and restarts a fresh session.
-- 🗑️ **Auto Expired Log Cleanup**: Automatically deletes log files older than the configured retention period (default: 2 days) on startup and every 6 hours. Logs each deletion with file size and total space reclaimed.
+- 🗑️ **Auto Expired Log Cleanup**: Automatically deletes log files older than the configured retention period (default: 2 days) on startup and every 6 hours.
 - 🌙 **Modern Dark/Light UI**: Built with Tkinter, featuring customizable font sizes, log filtering, and one-click copy buttons for Hotkey / Coldkey.
 
 ---

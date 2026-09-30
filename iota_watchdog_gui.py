@@ -7,7 +7,8 @@ import subprocess
 import re
 import json
 import threading
-from datetime import datetime
+import webbrowser
+from datetime import datetime, timedelta
 try:
     import tkinter as tk
     from tkinter import messagebox, scrolledtext
@@ -17,6 +18,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
+APP_VERSION = "1.4.0"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -34,6 +36,8 @@ DEFAULT_CONFIG = {
     "caffeinate_enabled": True,
     "log_font_size": 12,
     "log_retention_days": 2,
+    "zombie_stale_hours": 2,
+    "restart_timestamps": [],
     "last_upload_speed": "",
     "last_download_speed": ""
 }
@@ -61,7 +65,8 @@ KEY_LOG_KEYWORDS = [
     "all_layers_training", "activation_queue", "select_by_capacity", "report_loss",
     "Failed to send", "Peer unreachable", "unreachable", "dropping",
     "submit_activation", "submit_weights", "position", "queued", "queue_id",
-    "/miner/register/status"
+    "/miner/register/status", "orchestrator", "No activations received",
+    "Received activations", "Cache size", "cache size of"
 ]
 
 THEMES = {
@@ -153,8 +158,8 @@ class ModernButton(tk.Label):
 class IotaWatchdogApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("IOTA Train at Home 智能监控控制台")
-        self.root.geometry("1020x1020")
+        self.root.title(f"IOTA Watchdog v{APP_VERSION} - Train at Home 智能监控控制台")
+        self.root.geometry("1020x1060")
         self.root.minsize(850, 850)
 
         # 尝试加载自定义图标
@@ -220,6 +225,34 @@ class IotaWatchdogApp:
         self.last_peer_log_time = 0
         self.last_queue_heartbeat_log_time = 0
 
+        # v1.4.0 链上状态、排名与僵尸状态检测 (P0)
+        self.is_zombie = False
+        self.zombie_flat_hours = 0.0
+        self.zombie_net_growth = 0
+        self.zombie_alert_text = ""
+        self.chain_data_available = True
+        self.chain_token_count = 0
+        self.chain_network_tokens = 0
+        self.chain_network_growth_2h = 0
+        self.chain_rank = None
+        self.chain_num_miners = None
+        self.chain_contribution_perc = None
+        self.next_payout_ts = None
+        self.current_window_tokens = 0.0
+
+        # v1.4.0 Orchestrator 与 Cache 状态 (P1)
+        self.orchestrator_status = "检测中..."
+        self.last_cache_size = None
+        self.last_cache_max = 16
+        self.all_layers_training_bool = None
+        self.last_activation_time = time.time()
+
+        # v1.4.0 Epoch 感知与防频繁重启 (P2)
+        self.current_epoch_num = None
+        self.epoch_start_time = None
+        self.last_activation_epoch = None
+        self.restart_timestamps = self.config.get("restart_timestamps", [])
+
         self.widgets = {}
 
         # 启动时立即尝试提取 Hotkey / Coldkey
@@ -268,6 +301,7 @@ class IotaWatchdogApp:
         self.monitor_thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.monitor_thread.start()
         self.root.after(500, lambda: self.trigger_fetch_payout(manual=False))
+        self.root.after(1000, self._tick_countdown)
 
     def get_queue_status_text(self, wait_mins=0.0):
         if self.last_queue_position is None:
@@ -401,6 +435,43 @@ class IotaWatchdogApp:
                         self.last_status = "training"
                         self.is_actively_training = True
 
+                    # 初始解析 Cache size (P1)
+                    cache_matches = list(re.finditer(r"(?:cache size of (\d+)|Cache size:\s*(\d+)/(\d+))", content))
+                    if cache_matches:
+                        last_cm = cache_matches[-1]
+                        if last_cm.group(1):
+                            self.last_cache_size = int(last_cm.group(1))
+                            self.last_cache_max = 16
+                        else:
+                            self.last_cache_size = int(last_cm.group(2))
+                            self.last_cache_max = int(last_cm.group(3))
+
+                    # 初始解析 all_layers_training (P1)
+                    al_matches = list(re.finditer(r"request to /miner/all_layers_training.*?response:\s*(True|False)", content))
+                    if al_matches:
+                        self.all_layers_training_bool = (al_matches[-1].group(1) == "True")
+                        self.all_layers_ready = "全部层就绪 (True)" if self.all_layers_training_bool else "等待各层中 (False)"
+
+                    # 初始解析 orchestrator 激活状态 (P1)
+                    if list(re.finditer(r"(?:No activations received from orchestrator|Received activations: 0)", content[-5000:])):
+                        self.orchestrator_status = "等待 orchestrator 分配"
+                    elif list(re.finditer(r"Activation push RECV", content[-5000:])):
+                        self.orchestrator_status = "正常接收激活中"
+
+                    # 初始解析 heartbeat 中的 epoch (P2)
+                    hb_matches = list(re.finditer(r"request to /miner/heartbeat.*?response:\s*({.*?})", content))
+                    if hb_matches:
+                        try:
+                            hb_dict = eval(hb_matches[-1].group(1))
+                            if hb_dict.get("epoch") is not None:
+                                self.current_epoch_num = int(hb_dict["epoch"])
+                                self.current_epoch = f"Epoch {self.current_epoch_num}"
+                                self.epoch_start_time = time.time()
+                                self.last_activation_epoch = self.current_epoch_num
+                        except Exception:
+                            pass
+
+                    self.update_orchestrator_cache_ui()
                     self.update_p2p_health_ui()
             except Exception:
                 pass
@@ -411,6 +482,86 @@ class IotaWatchdogApp:
                 t_str = f" ({self.last_speedtest_time} 测得)" if getattr(self, "last_speedtest_time", "") else ""
                 self.lbl_speed_info.config(text=f"最近测速网速: ⬆ 上传 {self.last_upload_speed}  (⬇ 下载 {self.last_download_speed}){t_str}", fg="#0284c7" if not self.dark_mode else "#38bdf8")
         self.root.after(0, _update)
+
+    def update_orchestrator_cache_ui(self):
+        def _do():
+            if hasattr(self, "lbl_orchestrator"):
+                if self.last_cache_size is not None:
+                    if self.last_cache_size >= self.last_cache_max:
+                        c_tag = "满 (待Backward计算)"
+                        c_fg = "#15803d" if not self.dark_mode else "#4ade80"
+                    elif self.last_cache_size == 0:
+                        c_tag = "空 (待分发活)"
+                        c_fg = "#d97706" if not self.dark_mode else "#fbbf24"
+                    else:
+                        c_tag = "正常计算中"
+                        c_fg = "#2563eb" if not self.dark_mode else "#60a5fa"
+                    cache_text = f"Cache 占用: {self.last_cache_size}/{self.last_cache_max} ({c_tag})"
+                else:
+                    cache_text = "Cache 占用: 检测中..."
+
+                orch_fg = "#15803d" if not self.dark_mode else "#4ade80"
+                if "等待" in self.orchestrator_status:
+                    orch_fg = "#d97706" if not self.dark_mode else "#fbbf24"
+
+                orch_text = f"Orchestrator 分配: {self.orchestrator_status}"
+                al_text = f"全网层就绪: {'是' if self.all_layers_training_bool else '否'}" if self.all_layers_training_bool is not None else ""
+                al_part = f" | {al_text}" if al_text else ""
+                self.lbl_orchestrator.config(text=f"{orch_text} | {cache_text}{al_part}", fg=orch_fg)
+
+            if hasattr(self, "lbl_epoch_status"):
+                dur_mins = int((time.time() - self.epoch_start_time) / 60) if self.epoch_start_time else 0
+                ep_text = f"{self.current_epoch} · 持续 {dur_mins} 分钟" if self.current_epoch and "检测" not in self.current_epoch else "Epoch: 检测中..."
+                idle_eps = (self.current_epoch_num - self.last_activation_epoch) if (self.current_epoch_num and self.last_activation_epoch) else 0
+                if idle_eps >= 2 and self.is_actively_training:
+                    ep_hint = "⚠️ 已超 2 个 epoch 无新激活 (可考虑重启一次)"
+                    ep_fg = "#dc2626" if not self.dark_mode else "#f87171"
+                else:
+                    ep_hint = "等待上游 layer 或 epoch 切换 (正常)"
+                    ep_fg = "#16a34a" if not self.dark_mode else "#4ade80"
+                self.lbl_epoch_status.config(text=f"Epoch 感知: {ep_text} | 分配提示: {ep_hint}", fg=ep_fg)
+
+        self.root.after(0, _do)
+
+    def update_countdown_ui(self, window_tokens=None):
+        if window_tokens is not None:
+            self.current_window_tokens = window_tokens
+        now = datetime.now()
+        if self.next_payout_ts and self.next_payout_ts > now.timestamp():
+            rem_sec = max(0, self.next_payout_ts - now.timestamp())
+        else:
+            target_20pm = datetime(now.year, now.month, now.day, 20, 0, 0)
+            if now >= target_20pm:
+                target_20pm += timedelta(days=1)
+            rem_sec = max(0, (target_20pm - now).total_seconds())
+
+        rem_h = int(rem_sec // 3600)
+        rem_m = int((rem_sec % 3600) // 60)
+        w_wan = (self.current_window_tokens / 10000.0) if hasattr(self, "current_window_tokens") else 0.0
+
+        countdown_text = f"⏳ 结算倒计时: 距离下次结算还有 {rem_h} 小时 {rem_m:02d} 分 (每天 20:00 EDT / UTC 00:00) | 本窗口增量: +{w_wan:.2f} 万 Tokens"
+        def _do():
+            if hasattr(self, "lbl_payout_countdown"):
+                self.lbl_payout_countdown.config(text=countdown_text)
+        self.root.after(0, _do)
+
+    def _tick_countdown(self):
+        if not self.running:
+            return
+        self.update_countdown_ui()
+        self.update_orchestrator_cache_ui()
+        self.root.after(30000, self._tick_countdown)
+
+    def update_zombie_banner_ui(self):
+        def _do():
+            if hasattr(self, "banner_zombie") and hasattr(self, "lbl_zombie_msg"):
+                if self.is_zombie:
+                    self.lbl_zombie_msg.config(text=self.zombie_alert_text)
+                    if hasattr(self, "widgets") and "card_status" in self.widgets:
+                        self.banner_zombie.pack(before=self.widgets["card_status"], fill=tk.X, pady=(0, 10))
+                else:
+                    self.banner_zombie.pack_forget()
+        self.root.after(0, _do)
 
     def update_p2p_health_ui(self):
         now = time.time()
@@ -519,6 +670,13 @@ class IotaWatchdogApp:
             totals = _get_json(f"{base}/v1/entitlements/totals/hotkey/{hotkey}")
             history = _get_json(f"{base}/v1/entitlements/history/hotkey/{hotkey}")
             
+            # 查询下次官方结算时间戳 (P1)
+            try:
+                payout_ts_res = _get_json(f"{base}/v1/entitlements/next_payout_timestamp")
+                self.next_payout_ts = payout_ts_res.get("next_payout_time")
+            except Exception:
+                pass
+
             earned = totals.get("total_amount_earned", 0.0)
             paid = totals.get("total_amount_paid", 0.0)
             pending = totals.get("total_amount_pending", 0.0)
@@ -532,125 +690,201 @@ class IotaWatchdogApp:
             if amounts and timestamps:
                 combined = list(zip(amounts, timestamps, statuses))
                 combined.reverse()
-                for amt, ts, st in combined[:5]:
+                for amt, ts, st in combined[:7]:
                     dt_str = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
                     st_str = "已结算" if st == "settled" else st
                     payout_lines.append(f"● {dt_str} EDT: {amt:.3f} Alpha ({st_str})")
             else:
                 payout_lines.append("暂无历史结算发放记录")
 
-            # 聚合多 Run 计算最近 3 天及当天最近 3 小时有效 Token 贡献量
+            # 聚合多 Run 计算有效 Token 贡献量（按 20:00 结算周期统计近 3 天对比，以及最近 6 小时每小时贡献）
             token_lines = []
+            cand_runs = []
+            if self.current_run_id and "检测中" not in self.current_run_id:
+                cand_runs.append(self.current_run_id)
+            # 扫描最近的 cli 日志以发现所有近期运行的 Run ID
+            cli_logs = glob.glob(os.path.join(LOG_DIR, "*[0-9]-cli.log"))
+            cli_logs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            for lf_path in cli_logs[:5]:
+                try:
+                    with open(lf_path, "r", errors="ignore") as lf:
+                        for l in lf:
+                            for rm in re.finditer(r"4\.12\.16\.\d+-tah", l):
+                                r_cand = rm.group(0)
+                                if r_cand not in cand_runs:
+                                    cand_runs.append(r_cand)
+                except Exception:
+                    pass
+            for fb in ["4.12.16.20-tah", "4.12.16.24-tah", "4.12.16.14-tah"]:
+                if fb not in cand_runs:
+                    cand_runs.append(fb)
+
+            # 查询矿工在主 Run 下的官方排名 (P0 功能 2)
+            primary_run_clean = cand_runs[0].replace("run-", "").replace("_", ".")
             try:
-                cand_runs = []
-                if self.current_run_id and "检测中" not in self.current_run_id:
-                    cand_runs.append(self.current_run_id)
-                latest_log = self.get_latest_log()
-                if latest_log and os.path.exists(latest_log):
-                    try:
-                        with open(latest_log, "r", errors="ignore") as lf:
-                            for l in lf:
-                                for rm in re.finditer(r"4\.12\.16\.\d+-tah", l):
-                                    r_cand = rm.group(0)
-                                    if r_cand not in cand_runs:
-                                        cand_runs.append(r_cand)
-                    except Exception:
-                        pass
-                for fb in ["4.12.16.24-tah", "4.12.16.14-tah"]:
-                    if fb not in cand_runs:
-                        cand_runs.append(fb)
+                rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank")
+                self.chain_rank = rank_res.get("rank")
+                self.chain_num_miners = rank_res.get("num_hotkeys")
+                self.chain_contribution_perc = rank_res.get("act_contribution_perc")
+            except Exception:
+                pass
 
-                now = datetime.now()
-                today_date = now.strftime("%Y-%m-%d")
+            now = datetime.now()
 
-                daily_deltas = {}
-                hourly_deltas = {}
+            def _fetch_run_pts(r_name):
+                c_run = r_name.replace("run-", "").replace("_", ".")
+                u = f"{base}/miners/{hotkey}/runs/{c_run}/tokens"
+                try:
+                    res = _get_json(u)
+                    return r_name, res.get("data_points", [])
+                except Exception:
+                    return r_name, []
 
-                def _fetch_run_pts(r_name):
-                    c_run = r_name.replace("run-", "").replace("_", ".")
-                    u = f"{base}/miners/{hotkey}/runs/{c_run}/tokens"
-                    try:
-                        res = _get_json(u)
-                        return r_name, res.get("data_points", [])
-                    except Exception:
-                        return r_name, []
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=min(4, len(cand_runs))) as ex:
+                run_pts_map = dict(ex.map(_fetch_run_pts, cand_runs))
 
-                from concurrent.futures import ThreadPoolExecutor
-                with ThreadPoolExecutor(max_workers=min(4, len(cand_runs))) as ex:
-                    run_pts_map = dict(ex.map(_fetch_run_pts, cand_runs))
+            sorted_run_pts = {}
+            for r_name, points in run_pts_map.items():
+                if points:
+                    sorted_run_pts[r_name] = sorted(points, key=lambda x: x.get("timestamp", 0))
 
-                primary_run = cand_runs[0] if cand_runs else "4.12.16.24-tah"
+            primary_pts = sorted_run_pts.get(cand_runs[0]) or sorted_run_pts.get(primary_run_clean) or []
+            if not primary_pts and sorted_run_pts:
+                primary_pts = list(sorted_run_pts.values())[0]
 
-                for r_name, points in run_pts_map.items():
-                    if not points:
-                        continue
-                    pts = sorted(points, key=lambda x: x.get("timestamp", 0))
+            self.chain_token_count = sum(pts[-1].get("token_count", 0) for pts in sorted_run_pts.values() if pts)
+            self.chain_network_tokens = primary_pts[-1].get("network_tokens", 0) if primary_pts else 0
+            self.chain_data_available = True
 
-                    by_day = {}
-                    for p in pts:
-                        d_str = datetime.fromtimestamp(p["timestamp"]).strftime("%Y-%m-%d")
-                        by_day.setdefault(d_str, []).append(p)
+            # 僵尸状态检测 (P0 核心需求)
+            latest_token_cnt = primary_pts[-1].get("token_count", 0) if primary_pts else 0
+            latest_net_tokens = primary_pts[-1].get("network_tokens", 0) if primary_pts else 0
+            last_growth_ts = None
+            net_at_last_growth = latest_net_tokens
+            if primary_pts:
+                for pt in reversed(primary_pts[:-1]):
+                    if pt.get("token_count", 0) < latest_token_cnt:
+                        last_growth_ts = pt.get("timestamp")
+                        net_at_last_growth = pt.get("network_tokens", 0)
+                        break
+                if last_growth_ts is None:
+                    last_growth_ts = primary_pts[0].get("timestamp", now.timestamp())
+                    net_at_last_growth = primary_pts[0].get("network_tokens", 0)
 
-                    sorted_days = sorted(by_day.keys())
-                    prev_max = 0
-                    for d_str in sorted_days:
-                        d_max = max(p.get("token_count", 0) for p in by_day[d_str])
-                        d_delta = max(0, d_max - prev_max)
-                        daily_deltas[d_str] = daily_deltas.get(d_str, 0) + d_delta
-                        prev_max = d_max
+            now_ts = time.time()
+            flat_hours = (now_ts - last_growth_ts) / 3600.0 if last_growth_ts else 0.0
+            net_growth = max(0, latest_net_tokens - net_at_last_growth)
+            self.zombie_flat_hours = flat_hours
+            self.zombie_net_growth = net_growth
 
-                    # 当天最近每小时贡献（取包含今日数据的当前 Run）
-                    if today_date in by_day and (r_name == primary_run or not hourly_deltas):
-                        t_pts = by_day[today_date]
-                        from datetime import timedelta
-                        yest_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
-                        yest_max = max((p.get("token_count", 0) for p in by_day[yest_date]), default=0) if yest_date in by_day else 0
+            zombie_limit = float(self.config.get("zombie_stale_hours", 2.0))
+            proc_running, _ = self.check_process()
+            latest_log = self.get_latest_log()
+            log_fresh = bool(latest_log and os.path.exists(latest_log) and (now_ts - os.path.getmtime(latest_log) <= self.config.get("max_stale_minutes", 10) * 60))
 
-                        by_hour = {}
-                        for p in t_pts:
-                            h = datetime.fromtimestamp(p["timestamp"]).hour
-                            by_hour.setdefault(h, []).append(p.get("token_count", 0))
+            # 僵尸告警触发条件（全部满足）：进程在跑、心跳新鲜、链上 flat_hours >= 阈值、且同期全网 network_tokens 仍在增长 (> 10万)
+            if proc_running and log_fresh and flat_hours >= zombie_limit and net_growth > 100000:
+                self.is_zombie = True
+                self.zombie_alert_text = (
+                    f"⚠️ 疑似僵尸状态：本地运行正常，但链上已 {flat_hours:.1f} 小时无新 Token 入账（Run 正常，同期全网增长 +{net_growth/10000:.1f}万 Tokens）！\n"
+                    f"建议操作：按官方指南，训练中若超过 2 个 epoch 无新 activation 可重启一次节点。"
+                )
+            else:
+                self.is_zombie = False
+                self.zombie_alert_text = ""
 
-                        prev_h_cum = yest_max
-                        for h in range(now.hour + 1):
-                            if h in by_hour:
-                                cur_h_cum = max(by_hour[h])
-                                hourly_deltas[h] = max(0, cur_h_cum - prev_h_cum)
-                                prev_h_cum = cur_h_cum
-                            else:
-                                hourly_deltas[h] = 0
+            def get_tokens_at(pts, target_ts):
+                if not pts:
+                    return 0.0
+                if target_ts <= pts[0].get("timestamp", 0):
+                    return 0.0 if pts[0].get("token_count", 0) == 0 else float(pts[0].get("token_count", 0))
+                if target_ts >= pts[-1].get("timestamp", 0):
+                    return float(pts[-1].get("token_count", 0))
+                for i in range(len(pts) - 1):
+                    t0 = pts[i].get("timestamp", 0)
+                    c0 = pts[i].get("token_count", 0)
+                    t1 = pts[i+1].get("timestamp", 0)
+                    c1 = pts[i+1].get("token_count", 0)
+                    if t0 <= target_ts <= t1:
+                        if t1 == t0:
+                            return float(c0)
+                        ratio = (target_ts - t0) / (t1 - t0)
+                        return float(c0) + (float(c1) - float(c0)) * ratio
+                return float(pts[-1].get("token_count", 0))
 
-                # 格式化 UI 文本
-                token_lines.append("【当天最近 3 小时 (每小时)】")
-                for offset in [3, 2, 1]:
-                    th = now.hour - offset
-                    if th >= 0:
-                        h_val = hourly_deltas.get(th, 0)
-                        token_lines.append(f"● {th:02d}:00 - {th+1:02d}:00 : {h_val/10000:6.2f} 万 Tokens")
-                cur_h = now.hour
-                cur_val = hourly_deltas.get(cur_h, 0)
-                now_hm = now.strftime('%H:%M')
-                token_lines.append(f"● {cur_h:02d}:00 - {now_hm} : {cur_val/10000:6.2f} 万 Tokens (进行中)")
+            def get_range_tokens(t_start, t_end):
+                ts0 = t_start.timestamp()
+                ts1 = t_end.timestamp()
+                tot = 0.0
+                for pts in sorted_run_pts.values():
+                    v0 = get_tokens_at(pts, ts0)
+                    v1 = get_tokens_at(pts, ts1)
+                    if v1 > v0:
+                        tot += (v1 - v0)
+                return tot
 
-                token_lines.append("")
-                token_lines.append("【最近 3 天贡献量对比】")
-                from datetime import timedelta
-                for i in range(3):
-                    dt = now - timedelta(days=i)
-                    d_key = dt.strftime("%Y-%m-%d")
-                    d_short = dt.strftime("%m-%d")
-                    val = daily_deltas.get(d_key, 0)
-                    t_wan = val / 10000.0
-                    tag = " (今日)" if i == 0 else ""
-                    if i == 0:
-                        hint = " ✓ 正常贡献中" if t_wan > 0 else " ⚠️ 暂无产出(连接排查)"
+            # 1. 最近 6 小时贡献（每小时明细 + 合计）
+            cur_hour_start = datetime(now.year, now.month, now.day, now.hour, 0, 0)
+            hourly_items = []
+            sum_6h = 0.0
+            for h_offset in range(6, 0, -1):
+                h_start = cur_hour_start - timedelta(hours=h_offset)
+                h_end = h_start + timedelta(hours=1)
+                h_delta = get_range_tokens(h_start, h_end)
+                sum_6h += h_delta
+                hourly_items.append((h_start.strftime("%H:00"), h_end.strftime("%H:00"), h_delta))
+
+            cur_delta = get_range_tokens(cur_hour_start, now)
+            tot_with_current = sum_6h + cur_delta
+
+            s_cur = cur_hour_start.strftime("%H:00")
+            e_cur = now.strftime("%H:%M")
+            token_lines.append(f"【最近 6 小时贡献 (合计: {tot_with_current/10000:.2f}万 | 当前 {s_cur}~{e_cur} 进行中: {cur_delta/10000:.2f}万)】")
+
+            for i in range(0, len(hourly_items), 2):
+                pair = hourly_items[i:i+2]
+                row_str = "  |  ".join(f"{s}~{e}: {v/10000:5.2f}万" for s, e, v in pair)
+                token_lines.append(f"● {row_str}")
+
+            token_lines.append("")
+            # 2. 最近 3 天结算周期对比（以官方 20:00 EDT / UTC 00:00 结算为周期锚点）
+            token_lines.append("【最近 3 天结算周期对比 (20:00 结算)】")
+            anchor_date = now.date() if now.hour >= 20 else now.date() - timedelta(days=1)
+            anchor_20pm = datetime(anchor_date.year, anchor_date.month, anchor_date.day, 20, 0, 0)
+
+            cur_window_delta = 0.0
+            for cycle_idx in range(3):
+                c_start = anchor_20pm - timedelta(days=cycle_idx)
+                c_end = c_start + timedelta(days=1)
+                q_end = min(c_end, now)
+                c_delta = get_range_tokens(c_start, q_end)
+                if cycle_idx == 0:
+                    cur_window_delta = c_delta
+                t_wan = c_delta / 10000.0
+
+                s_str = c_start.strftime("%m-%d 20:00")
+                if cycle_idx == 0:
+                    e_str = "今晚20:00" if now.hour < 20 else "明晚20:00"
+                    status_tag = " (进行中)"
+                    hint = " ✓ 正常产出中" if t_wan > 0 else " ⚠️ 暂无产出(排查连接)"
+                else:
+                    e_str = c_end.strftime("%m-%d 20:00")
+                    status_tag = " (已结算)"
+                    settled_amt = None
+                    if amounts and timestamps:
+                        for a, t in zip(amounts, timestamps):
+                            if abs(t - c_end.timestamp()) <= 10800:
+                                settled_amt = a
+                                break
+                    if settled_amt is not None:
+                        hint = f" ✓ 结出 {settled_amt:.3f} Alpha"
                     elif t_wan < 20:
                         hint = " ⚠️ 产出不足0.4 Alpha未结"
                     else:
-                        hint = " ✓ 已计入产出"
-                    token_lines.append(f"● {d_short}{tag:7}: {t_wan:6.2f} 万 Tokens{hint}")
-            except Exception:
-                token_lines.append("暂未获取到 Run Token 统计")
+                        hint = " ✓ 已计入结算"
+
+                token_lines.append(f"● {s_str} ~ {e_str}{status_tag}: {t_wan:6.2f} 万 Tokens{hint}")
 
             def _update_ui():
                 if hasattr(self, "lbl_payout_totals"):
@@ -659,11 +893,40 @@ class IotaWatchdogApp:
                     )
                     self.lbl_daily_tokens.config(text="\n".join(token_lines))
                     self.lbl_payout_history.config(text="\n".join(payout_lines))
-                    if manual:
-                        self.append_watchdog_log("📊 [收益账单] 官方结算数据与每日贡献量已刷新同步！")
+
+                # 更新链上收益与本地估算并列面板 (P0 功能 2)
+                if hasattr(self, "lbl_chain_metrics"):
+                    local_wan = (self.forward_count * 3200) / 10000.0
+                    chain_wan = self.chain_token_count / 10000.0
+                    rank_info = f"第 {self.chain_rank}/{self.chain_num_miners} 名" if self.chain_rank else "排名同步中"
+                    if self.chain_contribution_perc is not None:
+                        rank_info += f" (贡献占比 {self.chain_contribution_perc*100:.2f}%)"
+                    self.lbl_chain_metrics.config(
+                        text=f"● 链上已确认: {chain_wan:,.2f} 万 Tokens (Ground Truth)  |  本地日志估算: {local_wan:,.2f} 万 Tokens (Forward: {self.forward_count}次)  |  全网排名: {rank_info}"
+                    )
+
+                # 更新 Run 健康度趋势
+                if hasattr(self, "lbl_network_health"):
+                    net_wan = self.chain_network_tokens / 10000.0
+                    trend_tag = "✓ 增长正常" if net_growth > 0 or self.chain_network_tokens > 0 else "⚠️ 暂无增长"
+                    self.lbl_network_health.config(
+                        text=f"● Run 健康参考: {primary_run_clean} 全网累计 {net_wan:,.1f} 万 Tokens ({trend_tag}，排除全网故障)"
+                    )
+
+                # 更新结算倒计时与僵尸横幅 (P1 & P0)
+                self.update_countdown_ui(cur_window_delta)
+                self.update_zombie_banner_ui()
+
+                if manual:
+                    self.append_watchdog_log("📊 [收益账单] 官方结算数据、链上Token与排名已刷新同步！")
 
             self.root.after(0, _update_ui)
         except Exception as e:
+            self.chain_data_available = False
+            self.is_zombie = False
+            self.update_zombie_banner_ui()
+            if hasattr(self, "lbl_chain_metrics"):
+                self.root.after(0, lambda: self.lbl_chain_metrics.config(text="● 链上已确认: 链上数据暂不可用 (网络连接超时或节点未响应，稍后自动重试)"))
             if manual:
                 self.root.after(0, lambda err=str(e): self.append_watchdog_log(f"⚠️ 刷新官方收益数据失败: {err}"))
 
@@ -760,7 +1023,9 @@ class IotaWatchdogApp:
                 elif name.startswith("card_"):
                     w.config(bg=t["bg_card"], fg=t["fg_title"] if isinstance(w, tk.LabelFrame) else None)
                 elif name.startswith("subcard_"):
-                    w.config(bg=t["bg_subcard"])
+                    w.config(bg=t["bg_subcard"] if "metrics" not in name and "bottom" not in name else t["bg_card"])
+                elif name == "banner_zombie":
+                    w.config(bg="#450a0a" if self.dark_mode else "#fee2e2")
                 else:
                     w.config(bg=t["bg_card"])
             elif isinstance(w, tk.Label) and not isinstance(w, ModernButton):
@@ -772,10 +1037,20 @@ class IotaWatchdogApp:
                     w.config(bg=t["bg_subcard"], fg="#38bdf8" if self.dark_mode else "#1d4ed8")
                 elif name in ["lbl_proc_status", "lbl_node_phase", "lbl_log_time", "lbl_train_stats"]:
                     w.config(bg=t["bg_card"], fg=t["fg_text"])
+                elif name in ["lbl_orchestrator", "lbl_epoch_status"]:
+                    w.config(bg=t["bg_card"])
                 elif name == "lbl_speed_info":
                     w.config(bg=t["bg_card"])
                 elif name == "lbl_p2p_health":
                     w.config(bg=t["bg_card"])
+                elif name == "lbl_chain_metrics":
+                    w.config(bg=t["bg_card"], fg="#38bdf8" if self.dark_mode else "#2563eb")
+                elif name in ["lbl_network_health", "lbl_payout_glossary"]:
+                    w.config(bg=t["bg_card"], fg=t["fg_muted"])
+                elif name == "lbl_payout_countdown":
+                    w.config(bg=t["bg_card"], fg="#38bdf8" if self.dark_mode else "#0284c7")
+                elif name == "lbl_zombie_msg":
+                    w.config(bg="#450a0a" if self.dark_mode else "#fee2e2", fg="#fca5a5" if self.dark_mode else "#991b1b")
                 elif name.startswith("lbl_payout_") or name in ["lbl_dt_title", "lbl_ph_title", "lbl_daily_tokens", "lbl_payout_history"]:
                     bg_c = w.master.cget("bg") if hasattr(w, "master") else t["bg_card"]
                     w.config(bg=bg_c, fg=t["fg_text"])
@@ -807,7 +1082,12 @@ class IotaWatchdogApp:
         self.btn_save.set_colors("#059669", "#ffffff", "#10b981")
         if hasattr(self, "btn_refresh_payout"):
             self.btn_refresh_payout.set_colors("#0284c7", "#ffffff", "#0369a1")
+        if hasattr(self, "btn_zombie_guide"):
+            self.btn_zombie_guide.set_colors("#b45309", "#ffffff", "#d97706")
+        if hasattr(self, "btn_zombie_restart"):
+            self.btn_zombie_restart.set_colors("#dc2626", "#ffffff", "#ef4444")
         self.update_p2p_health_ui()
+        self.update_orchestrator_cache_ui()
 
         self.txt_log.config(bg=t["log_bg"], fg=t["log_fg"], insertbackground=t["log_fg"], font=("Menlo", self.log_font_size))
 
@@ -854,6 +1134,21 @@ class IotaWatchdogApp:
     def manual_restart(self):
         if self.is_restarting:
             return
+        now_ts = time.time()
+        # 官方防频繁重启检查 (P2: 2 小时内重启 >= 2 次时弹窗提醒)
+        recent_restarts = [t for t in self.restart_timestamps if now_ts - t < 7200]
+        if len(recent_restarts) >= 2:
+            ans = messagebox.askyesno(
+                "官方防频繁重启提醒",
+                f"⚠️ 检测到您在过去 2 小时内已重启了 {len(recent_restarts)} 次！\n\n"
+                "官方指南明确指出：\n"
+                "• 官方不建议反复重启！\n"
+                "• 每次重启都要重新走一整个 epoch（5–60 分钟）的初始化与排队握手，过于频繁的重启只会更慢。\n\n"
+                "是否仍要强制重启？"
+            )
+            if not ans:
+                return
+
         threading.Thread(target=self._do_restart, args=(True,), daemon=True).start()
 
     def confirm_deep_clean(self):
@@ -940,7 +1235,12 @@ class IotaWatchdogApp:
             else:
                 subprocess.run(["open", "-a", APP_NAME])
 
-            self.last_restart_time = time.time()
+            now_ts = time.time()
+            self.last_restart_time = now_ts
+            self.restart_timestamps = [t for t in self.restart_timestamps if now_ts - t < 86400] + [now_ts]
+            self.config["restart_timestamps"] = self.restart_timestamps
+            save_config(self.config)
+
             self.queue_start_time = None
             self.log_file_pos = 0
             self.forward_count = 0
@@ -993,7 +1293,12 @@ class IotaWatchdogApp:
             else:
                 subprocess.run(["open", "-a", APP_NAME])
 
-            self.last_restart_time = time.time()
+            now_ts = time.time()
+            self.last_restart_time = now_ts
+            self.restart_timestamps = [t for t in self.restart_timestamps if now_ts - t < 86400] + [now_ts]
+            self.config["restart_timestamps"] = self.restart_timestamps
+            save_config(self.config)
+
             self.queue_start_time = None
             self.log_file_pos = 0
             self.forward_count = 0
@@ -1035,6 +1340,26 @@ class IotaWatchdogApp:
         self.lbl_watchdog_status = tk.Label(top_row, text="● 自动守护中", font=("Helvetica", 13, "bold"), fg="#16a34a")
         self.lbl_watchdog_status.pack(side=tk.RIGHT)
         self.widgets["lbl_watchdog_status"] = self.lbl_watchdog_status
+
+        # 1.1 疑似僵尸状态告警横幅 (P0 核心需求，默认隐藏)
+        banner_zombie = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=10)
+        self.banner_zombie = banner_zombie
+        self.widgets["banner_zombie"] = banner_zombie
+
+        lbl_zombie_msg = tk.Label(banner_zombie, text="", font=("Helvetica", 11, "bold"), justify="left", anchor="w")
+        lbl_zombie_msg.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.lbl_zombie_msg = lbl_zombie_msg
+        self.widgets["lbl_zombie_msg"] = lbl_zombie_msg
+
+        btn_zombie_restart = ModernButton(banner_zombie, text="⚡ 考虑手动重启", command=self.manual_restart, bg_color="#dc2626", fg_color="#ffffff", hover_bg="#ef4444", font=("Helvetica", 11, "bold"), padx=10, pady=4)
+        btn_zombie_restart.pack(side=tk.RIGHT, padx=(8, 0))
+        self.btn_zombie_restart = btn_zombie_restart
+
+        btn_zombie_guide = ModernButton(banner_zombie, text="📖 官方重启指南", command=lambda: webbrowser.open("https://www.trainathome.ai/en/guide/restart"), bg_color="#b45309", fg_color="#ffffff", hover_bg="#d97706", font=("Helvetica", 11, "bold"), padx=10, pady=4)
+        btn_zombie_guide.pack(side=tk.RIGHT, padx=(8, 0))
+        self.btn_zombie_guide = btn_zombie_guide
+
+        self.banner_zombie.pack_forget()
 
         # 2. 矿工与网络连接面板
         info_card = tk.LabelFrame(main_frame, text=" 矿工 ID 与连接信息 (一键复制) ", font=("Helvetica", 12, "bold"), padx=12, pady=10)
@@ -1136,29 +1461,39 @@ class IotaWatchdogApp:
         self.lbl_init_timer.grid(row=1, column=1, sticky="w", pady=3)
         self.widgets["lbl_init_timer"] = self.lbl_init_timer
 
+        # Orchestrator 与 Cache 状态 (P1 功能 3)
+        self.lbl_orchestrator = tk.Label(grid_frame, text="Orchestrator 分配: 检测中... | Cache 占用: 检测中...", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
+        self.lbl_orchestrator.grid(row=2, column=0, columnspan=2, sticky="w", pady=(3, 2))
+        self.widgets["lbl_orchestrator"] = self.lbl_orchestrator
+
+        # Epoch 感知与分级提示 (P2 功能 5)
+        self.lbl_epoch_status = tk.Label(grid_frame, text="Epoch 感知: 检测中... | 分配提示: 等待上游 layer 或 epoch 切换 (正常)", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
+        self.lbl_epoch_status.grid(row=3, column=0, columnspan=2, sticky="w", pady=(2, 2))
+        self.widgets["lbl_epoch_status"] = self.lbl_epoch_status
+
         # 训练计算实时统计
         self.lbl_train_stats = tk.Label(grid_frame, text="训练计算统计: ⏳ 待机中 (等待全网各层握手对齐触发计算)", font=("Helvetica", 12, "bold"), fg="#4b5563", anchor="w")
-        self.lbl_train_stats.grid(row=2, column=0, columnspan=2, sticky="w", pady=(3, 2))
+        self.lbl_train_stats.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_train_stats"] = self.lbl_train_stats
 
         # 最近测速网速
         self.lbl_speed_info = tk.Label(grid_frame, text="最近测速网速: ⬆ 上传 检测中...  (⬇ 下载 检测中...)", font=("Helvetica", 12, "bold"), fg="#0284c7", anchor="w")
-        self.lbl_speed_info.grid(row=3, column=0, columnspan=2, sticky="w", pady=(2, 2))
+        self.lbl_speed_info.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_speed_info"] = self.lbl_speed_info
 
         # P2P 广播与传输健康告警
         self.lbl_p2p_health = tk.Label(grid_frame, text="P2P传输与广播健康: 🟢 良好稳定 (检测中...)", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
-        self.lbl_p2p_health.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 2))
+        self.lbl_p2p_health.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_p2p_health"] = self.lbl_p2p_health
 
-        # 4. 每日有效算力贡献与历史到账面板
-        payout_card = tk.LabelFrame(main_frame, text=" 📊 每日有效算力贡献与历史到账 (Subnet 9 链上结算) ", font=("Helvetica", 12, "bold"), padx=12, pady=8)
+        # 4. 链上收益面板与每日贡献 (Subnet 9 链上结算) (P0 功能 2)
+        payout_card = tk.LabelFrame(main_frame, text=" 📊 链上收益面板与每日贡献 (Subnet 9 链上结算) ", font=("Helvetica", 12, "bold"), padx=12, pady=8)
         payout_card.pack(fill=tk.X, pady=(0, 10))
         self.widgets["card_payout"] = payout_card
 
         # 汇总数据栏
         payout_top = tk.Frame(payout_card)
-        payout_top.pack(fill=tk.X, pady=(0, 6))
+        payout_top.pack(fill=tk.X, pady=(0, 4))
         self.widgets["subcard_payout_top"] = payout_top
 
         self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 Alpha | 已结算到账: 0.000 Alpha | 待结转: 0.000 Alpha (门槛 0.4)", font=("Helvetica", 11, "bold"), anchor="w")
@@ -1167,6 +1502,19 @@ class IotaWatchdogApp:
 
         self.btn_refresh_payout = ModernButton(payout_top, text="🔄 刷新收益", command=lambda: self.trigger_fetch_payout(manual=True), bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0369a1", font=("Helvetica", 10, "bold"), padx=8, pady=2)
         self.btn_refresh_payout.pack(side=tk.RIGHT)
+
+        # 链上确认 vs 本地估算与全网排名 (P0 功能 2)
+        payout_metrics_box = tk.Frame(payout_card)
+        payout_metrics_box.pack(fill=tk.X, pady=(0, 6))
+        self.widgets["subcard_payout_metrics"] = payout_metrics_box
+
+        self.lbl_chain_metrics = tk.Label(payout_metrics_box, text="● 链上已确认: 正在同步... | 本地估算: 0.00 万 Tokens | 全网排名: 检测中...", font=("Helvetica", 11, "bold"), fg="#2563eb", anchor="w")
+        self.lbl_chain_metrics.pack(fill=tk.X)
+        self.widgets["lbl_chain_metrics"] = self.lbl_chain_metrics
+
+        self.lbl_network_health = tk.Label(payout_metrics_box, text="● Run 健康参考: 全网累计 token 趋势同步中...", font=("Helvetica", 10), fg="#64748b", anchor="w")
+        self.lbl_network_health.pack(fill=tk.X, pady=(2, 0))
+        self.widgets["lbl_network_health"] = self.lbl_network_health
 
         # 左右两栏：左侧每日有效 Token 贡献，右侧历史结算发放
         payout_cols = tk.Frame(payout_card)
@@ -1178,7 +1526,7 @@ class IotaWatchdogApp:
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         self.widgets["subcard_payout_left"] = left_col
 
-        lbl_dt_title = tk.Label(left_col, text="📈 有效 Token 贡献统计 (近3小时 / 近3天):", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_dt_title = tk.Label(left_col, text="📈 有效 Token 贡献统计 (近6小时 / 近3个结算周期):", font=("Helvetica", 11, "bold"), anchor="w")
         lbl_dt_title.pack(fill=tk.X)
         self.widgets["lbl_dt_title"] = lbl_dt_title
 
@@ -1199,10 +1547,18 @@ class IotaWatchdogApp:
         self.lbl_payout_history.pack(fill=tk.X, pady=(3, 0))
         self.widgets["lbl_payout_history"] = self.lbl_payout_history
 
-        # 下次结算提示
-        self.lbl_payout_next = tk.Label(payout_card, text="⏰ 结算说明: 官方每天 20:00 EDT (UTC 00:00) 统一发奖 | 达到 0.4 Alpha 自动转入 Coldkey，不足 0.4 自动滚存至次日", font=("Helvetica", 10), fg="#64748b", anchor="w")
-        self.lbl_payout_next.pack(fill=tk.X, pady=(6, 0))
-        self.widgets["lbl_payout_next"] = self.lbl_payout_next
+        # 结算倒计时与常驻名词解释 (P1 功能 4)
+        payout_bottom_box = tk.Frame(payout_card)
+        payout_bottom_box.pack(fill=tk.X, pady=(6, 0))
+        self.widgets["subcard_payout_bottom"] = payout_bottom_box
+
+        self.lbl_payout_countdown = tk.Label(payout_bottom_box, text="⏳ 结算倒计时: 距离下次结算还有 -- 小时 -- 分 (每天 20:00 EDT / UTC 00:00) | 本窗口增量: +0.00 万 Tokens", font=("Helvetica", 11, "bold"), fg="#0284c7", anchor="w")
+        self.lbl_payout_countdown.pack(fill=tk.X)
+        self.widgets["lbl_payout_countdown"] = self.lbl_payout_countdown
+
+        self.lbl_payout_glossary = tk.Label(payout_bottom_box, text="💡 术语说明: settled = 已发放到账 | pending = 未达 0.4 IOTA 起付线，攒着下次发 | forfeit = 当天 run 的 loss 没创新低、白干不补", font=("Helvetica", 10), fg="#64748b", anchor="w")
+        self.lbl_payout_glossary.pack(fill=tk.X, pady=(2, 0))
+        self.widgets["lbl_payout_glossary"] = self.lbl_payout_glossary
 
         # 5. 控制与工具栏
         ctrl_frame = tk.Frame(main_frame)
@@ -1256,34 +1612,43 @@ class IotaWatchdogApp:
         cfg_frame.pack(fill=tk.X, pady=(0, 10))
         self.widgets["card_cfg"] = cfg_frame
 
-        lbl_c2 = tk.Label(cfg_frame, text="彻底无日志假死判定 (分):", font=("Helvetica", 11, "bold"))
+        lbl_c1 = tk.Label(cfg_frame, text="僵尸判定 (小时):", font=("Helvetica", 11, "bold"))
+        lbl_c1.pack(side=tk.LEFT, padx=(0, 4))
+        self.widgets["cfg_lbl_c1"] = lbl_c1
+
+        self.entry_zombie_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_zombie_stale.insert(0, str(self.config.get("zombie_stale_hours", 2)))
+        self.entry_zombie_stale.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
+        self.widgets["entry_zombie_stale"] = self.entry_zombie_stale
+
+        lbl_c2 = tk.Label(cfg_frame, text="彻底无日志假死 (分):", font=("Helvetica", 11, "bold"))
         lbl_c2.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c2"] = lbl_c2
 
-        self.entry_max_stale = tk.Entry(cfg_frame, width=5, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_max_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
         self.entry_max_stale.insert(0, str(self.config.get("max_stale_minutes", 10)))
-        self.entry_max_stale.pack(side=tk.LEFT, padx=(0, 14), ipady=2)
+        self.entry_max_stale.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
         self.widgets["entry_max_stale"] = self.entry_max_stale
 
-        lbl_c3 = tk.Label(cfg_frame, text="重启保护冷却 (分):", font=("Helvetica", 11, "bold"))
+        lbl_c3 = tk.Label(cfg_frame, text="冷却 (分):", font=("Helvetica", 11, "bold"))
         lbl_c3.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c3"] = lbl_c3
 
-        self.entry_cooldown = tk.Entry(cfg_frame, width=5, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_cooldown = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
         self.entry_cooldown.insert(0, str(self.config.get("cooldown_minutes", 3)))
-        self.entry_cooldown.pack(side=tk.LEFT, padx=(0, 14), ipady=2)
+        self.entry_cooldown.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
         self.widgets["entry_cooldown"] = self.entry_cooldown
 
         lbl_c4 = tk.Label(cfg_frame, text="日志保留 (天):", font=("Helvetica", 11, "bold"))
         lbl_c4.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c4"] = lbl_c4
 
-        self.entry_retention = tk.Entry(cfg_frame, width=5, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_retention = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
         self.entry_retention.insert(0, str(self.config.get("log_retention_days", 2)))
-        self.entry_retention.pack(side=tk.LEFT, padx=(0, 14), ipady=2)
+        self.entry_retention.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
         self.widgets["entry_retention"] = self.entry_retention
 
-        self.btn_save = ModernButton(cfg_frame, text="💾 保存并应用参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 11, "bold"), padx=10, pady=3)
+        self.btn_save = ModernButton(cfg_frame, text="💾 保存参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 11, "bold"), padx=10, pady=3)
         self.btn_save.pack(side=tk.LEFT)
 
         # 5. 实时日志展示区域
@@ -1457,11 +1822,38 @@ class IotaWatchdogApp:
                     self.last_peer_log_time = now
                     self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] 📡 [P2P 握手] 当前 {self.current_layer} 已连接 {m.group(1)} 个活跃邻居节点 ({self.peer_mesh_status})\n", "SPEEDTEST")
 
-        # 提取全网层就绪状态
+        # 提取全网层就绪状态 (P1)
         if "request to /miner/all_layers_training" in line_clean:
             m = re.search(r"response:\s*(True|False)", line_clean)
             if m:
-                self.all_layers_ready = "已就绪 (True)" if m.group(1) == "True" else "等待各层中 (False)"
+                self.all_layers_training_bool = (m.group(1) == "True")
+                self.all_layers_ready = "全部层就绪 (True)" if self.all_layers_training_bool else "等待各层中 (False)"
+                self.update_orchestrator_cache_ui()
+
+        # 提取 Orchestrator 分配与激活状态 (P1 功能 3)
+        if "No activations received from orchestrator" in line_clean or "Received activations: 0" in line_clean:
+            self.orchestrator_status = "等待 orchestrator 分配"
+            self.update_orchestrator_cache_ui()
+        elif "Activation push RECV" in line_clean or "Downloaded activation" in line_clean:
+            self.orchestrator_status = "正常接收激活中"
+            self.last_activation_time = time.time()
+            if self.current_epoch_num:
+                self.last_activation_epoch = self.current_epoch_num
+            self.update_orchestrator_cache_ui()
+
+        # 提取 Cache 占用大小 (P1 功能 3)
+        cache_m = re.search(r"(?:cache size of (\d+)|Cache size:\s*(\d+)/(\d+)|cache size:\s*(\d+))", line_clean)
+        if cache_m:
+            if cache_m.group(1):
+                self.last_cache_size = int(cache_m.group(1))
+                self.last_cache_max = 16
+            elif cache_m.group(2) and cache_m.group(3):
+                self.last_cache_size = int(cache_m.group(2))
+                self.last_cache_max = int(cache_m.group(3))
+            elif cache_m.group(4):
+                self.last_cache_size = int(cache_m.group(4))
+                self.last_cache_max = 16
+            self.update_orchestrator_cache_ui()
 
         # 提取心跳与状态迁移
         if "request to /miner/heartbeat" in line_clean and "response:" in line_clean:
@@ -1476,10 +1868,15 @@ class IotaWatchdogApp:
                     if layer is not None:
                         self.current_layer = f"Layer {layer}"
                     if epoch is not None:
-                        self.current_epoch = f"Epoch {epoch}"
+                        ep_int = int(epoch)
+                        if self.current_epoch_num != ep_int:
+                            self.current_epoch_num = ep_int
+                            self.epoch_start_time = time.time()
+                        self.current_epoch = f"Epoch {ep_int}"
                     if run_id:
                         self.current_run_id = run_id
                     self.update_miner_info_ui()
+                    self.update_orchestrator_cache_ui()
 
                     if status == "initializing":
                         if self.queue_start_time is None:
@@ -1503,11 +1900,16 @@ class IotaWatchdogApp:
         # 统计 Forward / Backward
         if "FORWARD complete" in line_clean or "Forward pass" in line_clean:
             self.forward_count += 1
+            self.orchestrator_status = "正常接收激活中"
+            self.last_activation_time = time.time()
+            if self.current_epoch_num:
+                self.last_activation_epoch = self.current_epoch_num
             if not self.is_actively_training:
                 self.is_actively_training = True
                 self.queue_start_time = None
                 self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] 收到激活数据并完成 Forward 计算！ 🚀🚀🚀\n\n", "TRAINING")
             self.root.after(0, lambda: self.lbl_train_stats.config(text=f"训练计算统计: 🔥 正在计算中！(已完成 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"))
+            self.update_orchestrator_cache_ui()
         elif "BACKWARD complete" in line_clean or "Backward pass" in line_clean:
             self.backward_count += 1
             if not self.is_actively_training:
@@ -1515,6 +1917,7 @@ class IotaWatchdogApp:
                 self.queue_start_time = None
                 self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] 完成 Backward 反向传播梯度计算！ 🚀🚀🚀\n\n", "TRAINING")
             self.root.after(0, lambda: self.lbl_train_stats.config(text=f"训练计算统计: 🔥 正在计算中！(已完成 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"))
+            self.update_orchestrator_cache_ui()
 
         tag = "NORMAL"
         if "position" in line_clean.lower() or "queued" in line_clean.lower():
@@ -1557,15 +1960,16 @@ class IotaWatchdogApp:
 
     def apply_config(self):
         try:
+            self.config["zombie_stale_hours"] = max(0.5, float(self.entry_zombie_stale.get().strip()))
             self.config["max_stale_minutes"] = max(2, int(self.entry_max_stale.get().strip()))
             self.config["cooldown_minutes"] = max(1, int(self.entry_cooldown.get().strip()))
             self.config["log_retention_days"] = max(1, int(self.entry_retention.get().strip()))
             self.log_retention_days = self.config["log_retention_days"]
             save_config(self.config)
-            self.append_watchdog_log(f"✅ 参数已保存: 假死判定 {self.config['max_stale_minutes']}分 | 冷却 {self.config['cooldown_minutes']}分 | 日志保留 {self.config['log_retention_days']}天")
+            self.append_watchdog_log(f"✅ 参数已保存: 僵尸判定 {self.config['zombie_stale_hours']}h | 假死判定 {self.config['max_stale_minutes']}分 | 冷却 {self.config['cooldown_minutes']}分 | 日志保留 {self.config['log_retention_days']}天")
             messagebox.showinfo("成功", "配置已成功保存！")
         except ValueError:
-            messagebox.showerror("错误", "请输入有效的正整数！")
+            messagebox.showerror("错误", "请输入有效的数字！")
 
     def toggle_monitoring(self):
         self.is_monitoring = not self.is_monitoring

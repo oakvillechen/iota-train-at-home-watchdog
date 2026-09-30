@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790803521,
-  "updated_at_str": "2026-09-30 17:25:21",
+  "updated_at": 1790803642,
+  "updated_at_str": "2026-09-30 17:27:22",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 72)",
   "proc_running": true,
@@ -20,7 +20,7 @@
   "cycle_tokens": "586.94万",
   "hourly_tokens": [
     {
-      "range": "17:00~17:22",
+      "range": "17:00~17:27",
       "tokens": "7.81万",
       "tokens_num": 7.81,
       "is_current": true
@@ -57,5 +57,5 @@
     "time_str": "09-30 20:00 EDT",
     "display": "09-30 20:00 EDT"
   },
-  "last_log": "[2026-09-30 17:25:19.156] [info]  2026-09-30 17:25:19.155 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 17:27:21.867] [info]  2026-09-30 17:27:21.867 | ERROR    | subnet.common_api_client:orchestrator_request:97 - Error making orchestrator request to endpoint /miner/all_layers_training: 500 - Internal Server Error"
 }

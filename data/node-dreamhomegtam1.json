@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790796841,
-  "updated_at_str": "2026-09-30 15:34:01",
+  "updated_at": 1790796903,
+  "updated_at_str": "2026-09-30 15:35:03",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 71)",
   "proc_running": true,
@@ -11,9 +11,9 @@
   "upload_speed": "检测中...",
   "download_speed": "检测中...",
   "speedtest_time": "",
-  "peers_count": 18,
+  "peers_count": 17,
   "restart_count": 0,
-  "recent_tokens": "155.52万",
-  "cycle_tokens": "540.37万",
-  "last_log": "[2026-09-30 15:34:00.410] [info]  2026-09-30 15:34:00.410 | WARNING  | miner.training.activation_publisher:_process_outbound_item:624 - Peer unreachable for backward activation 52a4c3b2-8c4b-4b0d-9db7-13e9838614a2 (connect timeout after 5s), re-enqueuing same target in 1.00s (tries=3/5) | peer=backward[1] layer=1 | req=- | conn=- open=- send=- recv=-"
+  "recent_tokens": "159.20万",
+  "cycle_tokens": "546.19万",
+  "last_log": "[2026-09-30 15:34:58.681] [info]  2026-09-30 15:34:58.681 | WARNING  | subnet.common_api_client:orchestrator_request:59 - Retrying request to endpoint /miner/request_attestation_challenge (attempt 2)"
 }

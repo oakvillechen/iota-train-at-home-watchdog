@@ -21,6 +21,7 @@ except Exception:
 
 try:
     import tkinter as tk
+    import tkinter.font as tkFont
     from tkinter import messagebox, scrolledtext
 except ModuleNotFoundError:
     for alt_py in ["/usr/local/bin/python3", "/usr/bin/python3"]:
@@ -28,7 +29,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -44,6 +45,7 @@ DEFAULT_CONFIG = {
     "auto_scroll": True,
     "dark_mode": False,
     "ui_theme": "light",
+    "ui_font_scale": 85,
     "auto_check_update": True,
     "skipped_version": "",
     "caffeinate_enabled": True,
@@ -146,8 +148,9 @@ def format_size(size_bytes):
     return f"{size_bytes:.1f} TB"
 
 class ModernButton(tk.Label):
-    def __init__(self, parent, text, command=None, bg_color="#2d3d54", fg_color="#f8fafc", hover_bg="#3b506e", font=("Helvetica", 11, "bold"), padx=12, pady=5, **kwargs):
-        super().__init__(parent, text=text, bg=bg_color, fg=fg_color, font=font, padx=padx, pady=pady, relief="solid", bd=1, cursor="pointinghand", **kwargs)
+    def __init__(self, parent, text, command=None, bg_color="#2d3d54", fg_color="#f8fafc", hover_bg="#3b506e", font=None, padx=10, pady=4, **kwargs):
+        btn_font = font or ("Helvetica", 10, "bold")
+        super().__init__(parent, text=text, bg=bg_color, fg=fg_color, font=btn_font, padx=padx, pady=pady, relief="solid", bd=1, cursor="pointinghand", **kwargs)
         self.command = command
         self.bg_color = bg_color
         self.hover_bg = hover_bg
@@ -186,6 +189,8 @@ class IotaWatchdogApp:
         self.config = load_config()
         self.dark_mode = self.config.get("dark_mode", True)
         self.log_font_size = self.config.get("log_font_size", 12)
+        self.ui_font_scale = int(self.config.get("ui_font_scale", 85))
+        self.setup_fonts()
         self.log_retention_days = self.config.get("log_retention_days", 2)
         self.caffeinate_proc = None
         self.last_log_cleanup_time = 0
@@ -997,6 +1002,36 @@ class IotaWatchdogApp:
             if manual:
                 self.root.after(0, lambda err=str(e): self.append_watchdog_log(f"⚠️ 刷新官方收益数据失败: {err}"))
 
+    def setup_fonts(self):
+        s = self.ui_font_scale / 100.0
+        self.font_title = tkFont.Font(family="Helvetica", size=max(10, int(15 * s)), weight="bold")
+        self.font_card_title = tkFont.Font(family="Helvetica", size=max(9, int(11 * s)), weight="bold")
+        self.font_body_bold = tkFont.Font(family="Helvetica", size=max(8, int(10 * s)), weight="bold")
+        self.font_body = tkFont.Font(family="Helvetica", size=max(8, int(10 * s)))
+        self.font_small = tkFont.Font(family="Helvetica", size=max(7, int(9 * s)))
+        self.font_btn = tkFont.Font(family="Helvetica", size=max(8, int(10 * s)), weight="bold")
+        self.font_mono = tkFont.Font(family="Menlo", size=max(8, int(10 * s)))
+        self.font_mono_bold = tkFont.Font(family="Menlo", size=max(8, int(10 * s)), weight="bold")
+
+    def change_ui_font_scale(self, delta):
+        new_scale = max(60, min(140, self.ui_font_scale + delta))
+        if new_scale == self.ui_font_scale:
+            return
+        self.ui_font_scale = new_scale
+        self.config["ui_font_scale"] = self.ui_font_scale
+        save_config(self.config)
+        s = self.ui_font_scale / 100.0
+        self.font_title.configure(size=max(10, int(15 * s)))
+        self.font_card_title.configure(size=max(9, int(11 * s)))
+        self.font_body_bold.configure(size=max(8, int(10 * s)))
+        self.font_body.configure(size=max(8, int(10 * s)))
+        self.font_small.configure(size=max(7, int(9 * s)))
+        self.font_btn.configure(size=max(8, int(10 * s)))
+        self.font_mono.configure(size=max(8, int(10 * s)))
+        self.font_mono_bold.configure(size=max(8, int(10 * s)))
+        if hasattr(self, "lbl_ui_font_display"):
+            self.lbl_ui_font_display.config(text=f"{self.ui_font_scale}%")
+
     def change_font_size(self, delta):
         new_size = max(9, min(26, self.log_font_size + delta))
         if new_size != self.log_font_size:
@@ -1125,10 +1160,10 @@ class IotaWatchdogApp:
                 elif name.startswith("lbl_payout_") or name in ["lbl_dt_title", "lbl_ph_title", "lbl_daily_tokens", "lbl_payout_history"]:
                     bg_c = w.master.cget("bg") if hasattr(w, "master") else t["bg_card"]
                     w.config(bg=bg_c, fg=t["fg_text"])
-                elif name == "lbl_font_display":
-                    w.config(bg=t["bg_root"], fg=t["fg_text"])
-                elif name == "lbl_font_tag":
-                    w.config(bg=t["bg_root"], fg=t["fg_muted"])
+                elif name in ["lbl_font_display", "lbl_ui_font_display"]:
+                    w.config(bg=t["bg_card"], fg=t["fg_text"])
+                elif name in ["lbl_font_tag", "lbl_ui_font_tag"]:
+                    w.config(bg=t["bg_card"], fg=t["fg_muted"])
                 elif name == "lbl_init_timer":
                     w.config(bg=t["bg_card"])
                 elif "cfg_" in name:
@@ -1398,17 +1433,35 @@ class IotaWatchdogApp:
         top_row.pack(fill=tk.X)
         self.widgets["subcard_toprow"] = top_row
 
-        title_lbl = tk.Label(top_row, text="IOTA Train at Home 智能监控控制台", font=("Helvetica", 17, "bold"))
+        title_lbl = tk.Label(top_row, text="IOTA Train at Home 智能监控控制台", font=self.font_title)
         title_lbl.pack(side=tk.LEFT)
         self.widgets["lbl_title_main"] = title_lbl
 
-        self.btn_exit = ModernButton(top_row, text="🚪 退出程序", command=self.exit_app, bg_color="#dc2626", fg_color="#ffffff", hover_bg="#ef4444", font=("Helvetica", 11, "bold"), padx=12, pady=4)
-        self.btn_exit.pack(side=tk.RIGHT, padx=(10, 0))
+        self.btn_exit = ModernButton(top_row, text="🚪 退出程序", command=self.exit_app, bg_color="#dc2626", fg_color="#ffffff", hover_bg="#ef4444", font=self.font_btn, padx=10, pady=3)
+        self.btn_exit.pack(side=tk.RIGHT, padx=(8, 0))
 
-        self.btn_theme = ModernButton(top_row, text="☀️ 浅色模式", command=self.toggle_theme, font=("Helvetica", 11, "bold"), padx=10, pady=4)
-        self.btn_theme.pack(side=tk.RIGHT, padx=(10, 0))
+        self.btn_theme = ModernButton(top_row, text="☀️ 浅色模式", command=self.toggle_theme, font=self.font_btn, padx=8, pady=3)
+        self.btn_theme.pack(side=tk.RIGHT, padx=(8, 0))
 
-        self.lbl_watchdog_status = tk.Label(top_row, text="● 自动守护中", font=("Helvetica", 13, "bold"), fg="#16a34a")
+        ui_font_frame = tk.Frame(top_row)
+        ui_font_frame.pack(side=tk.RIGHT, padx=(10, 8))
+        self.widgets["ui_font_frame"] = ui_font_frame
+
+        self.btn_ui_font_inc = ModernButton(ui_font_frame, text="A+", command=lambda: self.change_ui_font_scale(5), font=self.font_btn, padx=6, pady=2)
+        self.btn_ui_font_inc.pack(side=tk.RIGHT, padx=(2, 0))
+
+        self.lbl_ui_font_display = tk.Label(ui_font_frame, text=f"{self.ui_font_scale}%", font=self.font_mono_bold)
+        self.lbl_ui_font_display.pack(side=tk.RIGHT, padx=(3, 3))
+        self.widgets["lbl_ui_font_display"] = self.lbl_ui_font_display
+
+        self.btn_ui_font_dec = ModernButton(ui_font_frame, text="A-", command=lambda: self.change_ui_font_scale(-5), font=self.font_btn, padx=6, pady=2)
+        self.btn_ui_font_dec.pack(side=tk.RIGHT, padx=(2, 2))
+
+        lbl_ui_font_tag = tk.Label(ui_font_frame, text="界面字号:", font=self.font_body_bold)
+        lbl_ui_font_tag.pack(side=tk.RIGHT, padx=(0, 2))
+        self.widgets["lbl_ui_font_tag"] = lbl_ui_font_tag
+
+        self.lbl_watchdog_status = tk.Label(top_row, text="● 自动守护中", font=self.font_body_bold, fg="#16a34a")
         self.lbl_watchdog_status.pack(side=tk.RIGHT)
         self.widgets["lbl_watchdog_status"] = self.lbl_watchdog_status
 
@@ -1417,18 +1470,18 @@ class IotaWatchdogApp:
         self.banner_update = banner_update
         self.widgets["banner_update"] = banner_update
 
-        lbl_update_msg = tk.Label(banner_update, text="", font=("Helvetica", 11, "bold"), justify="left", anchor="w")
+        lbl_update_msg = tk.Label(banner_update, text="", font=self.font_body_bold, justify="left", anchor="w")
         lbl_update_msg.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.lbl_update_msg = lbl_update_msg
         self.widgets["lbl_update_msg"] = lbl_update_msg
 
-        self.btn_update_now = ModernButton(banner_update, text="🚀 立即更新", command=self.perform_auto_update, bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=("Helvetica", 11, "bold"), padx=10, pady=4)
+        self.btn_update_now = ModernButton(banner_update, text="🚀 立即更新", command=self.perform_auto_update, bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=self.font_btn, padx=10, pady=3)
         self.btn_update_now.pack(side=tk.RIGHT, padx=(6, 0))
 
-        self.btn_update_later = ModernButton(banner_update, text="稍后", command=self.hide_update_banner, bg_color="#64748B", fg_color="#ffffff", hover_bg="#475569", font=("Helvetica", 11, "bold"), padx=8, pady=4)
+        self.btn_update_later = ModernButton(banner_update, text="稍后", command=self.hide_update_banner, bg_color="#64748B", fg_color="#ffffff", hover_bg="#475569", font=self.font_btn, padx=8, pady=3)
         self.btn_update_later.pack(side=tk.RIGHT, padx=(6, 0))
 
-        self.btn_update_skip = ModernButton(banner_update, text="跳过此版本", command=self.skip_update_version, bg_color="#475569", fg_color="#cbd5e1", hover_bg="#334155", font=("Helvetica", 10), padx=8, pady=4)
+        self.btn_update_skip = ModernButton(banner_update, text="跳过此版本", command=self.skip_update_version, bg_color="#475569", fg_color="#cbd5e1", hover_bg="#334155", font=self.font_small, padx=8, pady=3)
         self.btn_update_skip.pack(side=tk.RIGHT, padx=(6, 0))
 
         self.banner_update.pack_forget()
@@ -1454,42 +1507,42 @@ class IotaWatchdogApp:
         self.banner_zombie.pack_forget()
 
         # 2. 矿工与网络连接面板
-        info_card = tk.LabelFrame(main_frame, text=" 矿工 ID 与连接信息 (一键复制) ", font=("Helvetica", 12, "bold"), padx=12, pady=10)
-        info_card.pack(fill=tk.X, pady=(0, 10))
+        info_card = tk.LabelFrame(main_frame, text=" 矿工 ID 与连接信息 (一键复制) ", font=self.font_card_title, padx=12, pady=6)
+        info_card.pack(fill=tk.X, pady=(0, 8))
         self.widgets["card_info"] = info_card
 
         row1 = tk.Frame(info_card)
-        row1.pack(fill=tk.X, pady=3)
+        row1.pack(fill=tk.X, pady=2)
         self.widgets["subcard_row1"] = row1
 
-        lbl_hk = tk.Label(row1, text="Miner ID (Hotkey):", font=("Helvetica", 12, "bold"), width=16, anchor="w")
+        lbl_hk = tk.Label(row1, text="Miner ID (Hotkey):", font=self.font_body_bold, width=16, anchor="w")
         lbl_hk.pack(side=tk.LEFT)
         self.widgets["lbl_sub_hk"] = lbl_hk
 
-        self.entry_miner_id = tk.Entry(row1, font=("Menlo", 12, "bold"), bd=1, relief="solid")
+        self.entry_miner_id = tk.Entry(row1, font=self.font_mono_bold, bd=1, relief="solid")
         self.entry_miner_id.insert(0, "检测中...")
         self.entry_miner_id.config(state="readonly")
-        self.entry_miner_id.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=2)
+        self.entry_miner_id.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), ipady=2)
         self.widgets["entry_miner_id"] = self.entry_miner_id
 
-        self.btn_copy_hk = ModernButton(row1, text="📋 复制 ID", command=lambda: self.copy_to_clipboard(self.miner_hotkey, "Miner ID"), bg_color="#2563eb", fg_color="#ffffff", hover_bg="#3b82f6", font=("Helvetica", 11, "bold"), padx=10, pady=3)
+        self.btn_copy_hk = ModernButton(row1, text="📋 复制 ID", command=lambda: self.copy_to_clipboard(self.miner_hotkey, "Miner ID"), bg_color="#2563eb", fg_color="#ffffff", hover_bg="#3b82f6", font=self.font_btn, padx=8, pady=2)
         self.btn_copy_hk.pack(side=tk.RIGHT)
 
         row2 = tk.Frame(info_card)
-        row2.pack(fill=tk.X, pady=3)
+        row2.pack(fill=tk.X, pady=2)
         self.widgets["subcard_row2"] = row2
 
-        lbl_ck = tk.Label(row2, text="Payout Coldkey:", font=("Helvetica", 12, "bold"), width=16, anchor="w")
+        lbl_ck = tk.Label(row2, text="Payout Coldkey:", font=self.font_body_bold, width=16, anchor="w")
         lbl_ck.pack(side=tk.LEFT)
         self.widgets["lbl_sub_ck"] = lbl_ck
 
-        self.entry_coldkey = tk.Entry(row2, font=("Menlo", 12), bd=1, relief="solid")
+        self.entry_coldkey = tk.Entry(row2, font=self.font_mono, bd=1, relief="solid")
         self.entry_coldkey.insert(0, "检测中...")
         self.entry_coldkey.config(state="readonly")
-        self.entry_coldkey.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10), ipady=2)
+        self.entry_coldkey.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8), ipady=2)
         self.widgets["entry_coldkey"] = self.entry_coldkey
 
-        self.btn_copy_ck = ModernButton(row2, text="📋 复制 Coldkey", command=lambda: self.copy_to_clipboard(self.payout_coldkey, "Payout Coldkey"), bg_color="#2563eb", fg_color="#ffffff", hover_bg="#3b82f6", font=("Helvetica", 11, "bold"), padx=10, pady=3)
+        self.btn_copy_ck = ModernButton(row2, text="📋 复制 Coldkey", command=lambda: self.copy_to_clipboard(self.payout_coldkey, "Payout Coldkey"), bg_color="#2563eb", fg_color="#ffffff", hover_bg="#3b82f6", font=self.font_btn, padx=8, pady=2)
         self.btn_copy_ck.pack(side=tk.RIGHT)
 
         self.btn_toggle_ck = ModernButton(
@@ -1499,36 +1552,51 @@ class IotaWatchdogApp:
             bg_color=THEMES["dark"]["btn_neutral_bg"] if self.dark_mode else THEMES["light"]["btn_neutral_bg"],
             fg_color=THEMES["dark"]["btn_neutral_fg"] if self.dark_mode else THEMES["light"]["btn_neutral_fg"],
             hover_bg=THEMES["dark"]["btn_neutral_hover"] if self.dark_mode else THEMES["light"]["btn_neutral_hover"],
-            font=("Helvetica", 11, "bold"),
-            padx=10,
-            pady=3
+            font=self.font_btn,
+            padx=8,
+            pady=2
         )
         self.btn_toggle_ck.pack(side=tk.RIGHT, padx=(0, 6))
         self.widgets["btn_toggle_ck"] = self.btn_toggle_ck
 
+        self.btn_cloud_sync = ModernButton(
+            row2,
+            text="☁️ 多机云端监控",
+            command=self.open_cloud_sync_dialog,
+            bg_color="#6366f1",
+            fg_color="#ffffff",
+            hover_bg="#4f46e5",
+            font=self.font_btn,
+            padx=8,
+            pady=2
+        )
+        self.btn_cloud_sync.pack(side=tk.RIGHT, padx=(0, 6))
+        self.widgets["btn_cloud_sync"] = self.btn_cloud_sync
+
         row3 = tk.Frame(info_card)
-        row3.pack(fill=tk.X, pady=(6, 0))
+        row3.pack(fill=tk.X, pady=(4, 0))
         self.widgets["subcard_row3"] = row3
 
-        self.lbl_layer = tk.Label(row3, text="连接 Layer: 检测中", font=("Helvetica", 12, "bold"), padx=10, pady=3, relief="groove")
-        self.lbl_layer.pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_layer = tk.Label(row3, text="连接 Layer: 检测中", font=self.font_body_bold, padx=8, pady=2, relief="groove")
+        self.lbl_layer.pack(side=tk.LEFT, padx=(0, 6))
         self.widgets["lbl_badge_layer"] = self.lbl_layer
 
-        self.lbl_network = tk.Label(row3, text="Network: IOTA Subnet", font=("Helvetica", 12, "bold"), padx=10, pady=3, relief="groove")
-        self.lbl_network.pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_network = tk.Label(row3, text="Network: IOTA Subnet", font=self.font_body_bold, padx=8, pady=2, relief="groove")
+        self.lbl_network.pack(side=tk.LEFT, padx=(0, 6))
         self.widgets["lbl_badge_network"] = self.lbl_network
 
-        self.lbl_run_id = tk.Label(row3, text="Run ID: 检测中", font=("Helvetica", 12, "bold"), padx=10, pady=3, relief="groove")
-        self.lbl_run_id.pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_run_id = tk.Label(row3, text="Run ID: 检测中", font=self.font_body_bold, padx=8, pady=2, relief="groove")
+        self.lbl_run_id.pack(side=tk.LEFT, padx=(0, 6))
         self.widgets["lbl_badge_runid"] = self.lbl_run_id
 
-        self.lbl_epoch = tk.Label(row3, text="Epoch: 检测中", font=("Helvetica", 12, "bold"), padx=10, pady=3, relief="groove")
-        self.lbl_epoch.pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_epoch = tk.Label(row3, text="Epoch: 检测中", font=self.font_body_bold, padx=8, pady=2, relief="groove")
+        self.lbl_epoch.pack(side=tk.LEFT, padx=(0, 6))
         self.widgets["lbl_badge_epoch"] = self.lbl_epoch
 
         # 3. 运行状态看板（含实时排队状态与训练计算状态）
-        status_card = tk.LabelFrame(main_frame, text=" 节点运行与排队/训练实时看板 ", font=("Helvetica", 12, "bold"), padx=12, pady=8)
-        status_card.pack(fill=tk.X, pady=(0, 10))
+        # 3. 运行状态看板
+        status_card = tk.LabelFrame(main_frame, text=" 节点运行与排队/训练实时看板 ", font=self.font_card_title, padx=12, pady=6)
+        status_card.pack(fill=tk.X, pady=(0, 8))
         self.widgets["card_status"] = status_card
 
         grid_frame = tk.Frame(status_card)
@@ -1536,119 +1604,117 @@ class IotaWatchdogApp:
         self.widgets["subcard_grid"] = grid_frame
 
         # 进程与心跳
-        self.lbl_proc_status = tk.Label(grid_frame, text="进程状态: 🟢 检测中...", font=("Helvetica", 12, "bold"), anchor="w")
-        self.lbl_proc_status.grid(row=0, column=0, sticky="w", pady=3, padx=(0, 25))
+        self.lbl_proc_status = tk.Label(grid_frame, text="进程状态: 🟢 检测中...", font=self.font_body_bold, anchor="w")
+        self.lbl_proc_status.grid(row=0, column=0, sticky="w", pady=2, padx=(0, 20))
         self.widgets["lbl_proc_status"] = self.lbl_proc_status
 
-        self.lbl_log_time = tk.Label(grid_frame, text="最新日志心跳: 检测中...", font=("Helvetica", 12, "bold"), anchor="w")
-        self.lbl_log_time.grid(row=0, column=1, sticky="w", pady=3)
+        self.lbl_log_time = tk.Label(grid_frame, text="最新日志心跳: 检测中...", font=self.font_body_bold, anchor="w")
+        self.lbl_log_time.grid(row=0, column=1, sticky="w", pady=2)
         self.widgets["lbl_log_time"] = self.lbl_log_time
 
         # 当前阶段与排队位置
-        self.lbl_node_phase = tk.Label(grid_frame, text="当前阶段: 检测中...", font=("Helvetica", 12, "bold"), anchor="w")
-        self.lbl_node_phase.grid(row=1, column=0, sticky="w", pady=3, padx=(0, 25))
+        self.lbl_node_phase = tk.Label(grid_frame, text="当前阶段: 检测中...", font=self.font_body_bold, anchor="w")
+        self.lbl_node_phase.grid(row=1, column=0, sticky="w", pady=2, padx=(0, 20))
         self.widgets["lbl_node_phase"] = self.lbl_node_phase
 
-        self.lbl_init_timer = tk.Label(grid_frame, text="排队状态: 🟢 检测排队中...", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
-        self.lbl_init_timer.grid(row=1, column=1, sticky="w", pady=3)
+        self.lbl_init_timer = tk.Label(grid_frame, text="排队状态: 🟢 检测排队中...", font=self.font_body_bold, fg="#16a34a", anchor="w")
+        self.lbl_init_timer.grid(row=1, column=1, sticky="w", pady=2)
         self.widgets["lbl_init_timer"] = self.lbl_init_timer
 
-        # Orchestrator 与 Cache 状态 (P1 功能 3)
-        self.lbl_orchestrator = tk.Label(grid_frame, text="Orchestrator 分配: 检测中... | Cache 占用: 检测中...", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
-        self.lbl_orchestrator.grid(row=2, column=0, columnspan=2, sticky="w", pady=(3, 2))
+        # Orchestrator 与 Cache 状态
+        self.lbl_orchestrator = tk.Label(grid_frame, text="Orchestrator 分配: 检测中... | Cache 占用: 检测中...", font=self.font_body_bold, fg="#16a34a", anchor="w")
+        self.lbl_orchestrator.grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_orchestrator"] = self.lbl_orchestrator
 
-        # Epoch 感知与分级提示 (P2 功能 5)
-        self.lbl_epoch_status = tk.Label(grid_frame, text="Epoch 感知: 检测中... | 分配提示: 等待上游 layer 或 epoch 切换 (正常)", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
+        # Epoch 感知与分级提示
+        self.lbl_epoch_status = tk.Label(grid_frame, text="Epoch 感知: 检测中... | 分配提示: 等待上游 layer 或 epoch 切换 (正常)", font=self.font_body_bold, fg="#16a34a", anchor="w")
         self.lbl_epoch_status.grid(row=3, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_epoch_status"] = self.lbl_epoch_status
 
         # 训练计算实时统计
-        self.lbl_train_stats = tk.Label(grid_frame, text="训练计算统计: ⏳ 待机中 (等待全网各层握手对齐触发计算)", font=("Helvetica", 12, "bold"), fg="#4b5563", anchor="w")
+        self.lbl_train_stats = tk.Label(grid_frame, text="训练计算统计: ⏳ 待机中 (等待全网各层握手对齐触发计算)", font=self.font_body_bold, fg="#4b5563", anchor="w")
         self.lbl_train_stats.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_train_stats"] = self.lbl_train_stats
 
         # 最近测速网速
-        self.lbl_speed_info = tk.Label(grid_frame, text="最近测速网速: ⬆ 上传 检测中...  (⬇ 下载 检测中...)", font=("Helvetica", 12, "bold"), fg="#0284c7", anchor="w")
+        self.lbl_speed_info = tk.Label(grid_frame, text="最近测速网速: ⬆ 上传 检测中...  (⬇ 下载 检测中...)", font=self.font_body_bold, fg="#0284c7", anchor="w")
         self.lbl_speed_info.grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_speed_info"] = self.lbl_speed_info
 
         # P2P 广播与传输健康告警
-        self.lbl_p2p_health = tk.Label(grid_frame, text="P2P传输与广播健康: 🟢 良好稳定 (检测中...)", font=("Helvetica", 12, "bold"), fg="#16a34a", anchor="w")
+        self.lbl_p2p_health = tk.Label(grid_frame, text="P2P传输与广播健康: 🟢 良好稳定 (检测中...)", font=self.font_body_bold, fg="#16a34a", anchor="w")
         self.lbl_p2p_health.grid(row=6, column=0, columnspan=2, sticky="w", pady=(2, 2))
         self.widgets["lbl_p2p_health"] = self.lbl_p2p_health
 
-        # 4. 链上收益面板与每日贡献 (Subnet 9 链上结算) (P0 功能 2)
-        payout_card = tk.LabelFrame(main_frame, text=" 📊 链上收益面板与每日贡献 (Subnet 9 链上结算) ", font=("Helvetica", 12, "bold"), padx=12, pady=8)
-        payout_card.pack(fill=tk.X, pady=(0, 10))
+        # 4. 链上收益面板与每日贡献
+        payout_card = tk.LabelFrame(main_frame, text=" 📊 链上收益面板与每日贡献 (Subnet 9 链上结算) ", font=self.font_card_title, padx=12, pady=6)
+        payout_card.pack(fill=tk.X, pady=(0, 8))
         self.widgets["card_payout"] = payout_card
 
         # 汇总数据栏
         payout_top = tk.Frame(payout_card)
-        payout_top.pack(fill=tk.X, pady=(0, 4))
+        payout_top.pack(fill=tk.X, pady=(0, 3))
         self.widgets["subcard_payout_top"] = payout_top
 
-        self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 Alpha | 已结算到账: 0.000 Alpha | 待结转: 0.000 Alpha (门槛 0.4)", font=("Helvetica", 11, "bold"), anchor="w")
+        self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 Alpha | 已结算到账: 0.000 Alpha | 待结转: 0.000 Alpha (门槛 0.4)", font=self.font_body_bold, anchor="w")
         self.lbl_payout_totals.pack(side=tk.LEFT)
         self.widgets["lbl_payout_totals"] = self.lbl_payout_totals
 
-        self.btn_refresh_payout = ModernButton(payout_top, text="🔄 刷新收益", command=lambda: self.trigger_fetch_payout(manual=True), bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0369a1", font=("Helvetica", 10, "bold"), padx=8, pady=2)
+        self.btn_refresh_payout = ModernButton(payout_top, text="🔄 刷新收益", command=lambda: self.trigger_fetch_payout(manual=True), bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0369a1", font=self.font_btn, padx=8, pady=2)
         self.btn_refresh_payout.pack(side=tk.RIGHT)
 
-        # 链上确认 vs 本地估算与全网排名 (P0 功能 2)
+        # 链上确认 vs 本地估算与全网排名
         payout_metrics_box = tk.Frame(payout_card)
-        payout_metrics_box.pack(fill=tk.X, pady=(0, 6))
+        payout_metrics_box.pack(fill=tk.X, pady=(0, 4))
         self.widgets["subcard_payout_metrics"] = payout_metrics_box
 
-        self.lbl_chain_metrics = tk.Label(payout_metrics_box, text="● 链上已确认: 正在同步... | 本地估算: 0.00 万 Tokens | 全网排名: 检测中...", font=("Helvetica", 11, "bold"), fg="#2563eb", anchor="w")
+        self.lbl_chain_metrics = tk.Label(payout_metrics_box, text="● 链上已确认: 正在同步... | 本地估算: 0.00 万 Tokens | 全网排名: 检测中...", font=self.font_body_bold, fg="#2563eb", anchor="w")
         self.lbl_chain_metrics.pack(fill=tk.X)
         self.widgets["lbl_chain_metrics"] = self.lbl_chain_metrics
 
-        self.lbl_network_health = tk.Label(payout_metrics_box, text="● Run 健康参考: 全网累计 token 趋势同步中...", font=("Helvetica", 10), fg="#64748b", anchor="w")
+        self.lbl_network_health = tk.Label(payout_metrics_box, text="● Run 健康参考: 全网累计 token 趋势同步中...", font=self.font_body, fg="#64748b", anchor="w")
         self.lbl_network_health.pack(fill=tk.X, pady=(2, 0))
         self.widgets["lbl_network_health"] = self.lbl_network_health
 
-        # 左右两栏：左侧每日有效 Token 贡献，右侧历史结算发放
+        # 左右两栏
         payout_cols = tk.Frame(payout_card)
         payout_cols.pack(fill=tk.X)
         self.widgets["subcard_payout_cols"] = payout_cols
 
-        # 左侧：每日贡献量
-        left_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=6)
-        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        left_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=4)
+        left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
         self.widgets["subcard_payout_left"] = left_col
 
-        lbl_dt_title = tk.Label(left_col, text="📈 有效 Token 贡献统计 (近6小时 / 近3个结算周期):", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_dt_title = tk.Label(left_col, text="📈 有效 Token 贡献统计 (近6小时 / 近3个结算周期):", font=self.font_body_bold, anchor="w")
         lbl_dt_title.pack(fill=tk.X)
         self.widgets["lbl_dt_title"] = lbl_dt_title
 
-        self.lbl_daily_tokens = tk.Label(left_col, text="正在同步官方数据...", font=("Menlo", 10), justify="left", anchor="w")
-        self.lbl_daily_tokens.pack(fill=tk.X, pady=(3, 0))
+        self.lbl_daily_tokens = tk.Label(left_col, text="正在同步官方数据...", font=self.font_mono, justify="left", anchor="w")
+        self.lbl_daily_tokens.pack(fill=tk.X, pady=(2, 0))
         self.widgets["lbl_daily_tokens"] = self.lbl_daily_tokens
 
-        # 右侧：历史到账记录
-        right_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=6)
-        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        right_col = tk.Frame(payout_cols, bd=1, relief="groove", padx=8, pady=4)
+        right_col.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(4, 0))
         self.widgets["subcard_payout_right"] = right_col
 
-        lbl_ph_title = tk.Label(right_col, text="💰 历史结算发放记录 (按日到账):", font=("Helvetica", 11, "bold"), anchor="w")
+        lbl_ph_title = tk.Label(right_col, text="💰 历史结算发放记录 (按日到账):", font=self.font_body_bold, anchor="w")
         lbl_ph_title.pack(fill=tk.X)
         self.widgets["lbl_ph_title"] = lbl_ph_title
 
-        self.lbl_payout_history = tk.Label(right_col, text="正在同步官方数据...", font=("Menlo", 10), justify="left", anchor="w")
-        self.lbl_payout_history.pack(fill=tk.X, pady=(3, 0))
+        self.lbl_payout_history = tk.Label(right_col, text="正在同步官方数据...", font=self.font_mono, justify="left", anchor="w")
+        self.lbl_payout_history.pack(fill=tk.X, pady=(2, 0))
         self.widgets["lbl_payout_history"] = self.lbl_payout_history
 
-        # 结算倒计时与常驻名词解释 (P1 功能 4)
+        # 结算倒计时与常驻名词解释
         payout_bottom_box = tk.Frame(payout_card)
-        payout_bottom_box.pack(fill=tk.X, pady=(6, 0))
+        payout_bottom_box.pack(fill=tk.X, pady=(4, 0))
         self.widgets["subcard_payout_bottom"] = payout_bottom_box
 
-        self.lbl_payout_countdown = tk.Label(payout_bottom_box, text="⏳ 结算倒计时: 距离下次结算还有 -- 小时 -- 分 (每天 20:00 EDT / UTC 00:00) | 本窗口增量: +0.00 万 Tokens", font=("Helvetica", 11, "bold"), fg="#0284c7", anchor="w")
+        self.lbl_payout_countdown = tk.Label(payout_bottom_box, text="⏳ 结算倒计时: 距离下次结算还有 -- 小时 -- 分 (每天 20:00 EDT / UTC 00:00) | 本窗口增量: +0.00 万 Tokens", font=self.font_body_bold, fg="#0284c7", anchor="w")
         self.lbl_payout_countdown.pack(fill=tk.X)
         self.widgets["lbl_payout_countdown"] = self.lbl_payout_countdown
 
-        self.lbl_payout_glossary = tk.Label(payout_bottom_box, text="💡 术语说明: settled = 已发放到账 | pending = 未达 0.4 IOTA 起付线，攒着下次发 | forfeit = 当天 run 的 loss 没创新低、白干不补", font=("Helvetica", 10), fg="#64748b", anchor="w")
+        self.lbl_payout_glossary = tk.Label(payout_bottom_box, text="💡 术语说明: settled = 已发放到账 | pending = 未达 0.4 IOTA 起付线，攒着下次发 | forfeit = 当天 run 的 loss 没创新低、白干不补", font=self.font_small, fg="#64748b", anchor="w")
         self.lbl_payout_glossary.pack(fill=tk.X, pady=(2, 0))
         self.widgets["lbl_payout_glossary"] = self.lbl_payout_glossary
 
@@ -1657,100 +1723,100 @@ class IotaWatchdogApp:
         ctrl_frame.pack(fill=tk.X, pady=(0, 8))
         self.widgets["ctrl_frame"] = ctrl_frame
 
-        self.btn_toggle = ModernButton(ctrl_frame, text="⏸ 暂停自动守护", command=self.toggle_monitoring, font=("Helvetica", 11, "bold"), padx=10, pady=5)
-        self.btn_toggle.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_toggle = ModernButton(ctrl_frame, text="⏸ 暂停自动守护", command=self.toggle_monitoring, font=self.font_btn, padx=10, pady=4)
+        self.btn_toggle.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.btn_restart = ModernButton(ctrl_frame, text="⚡ 手动强制重启 IOTA", command=self.manual_restart, bg_color="#dc2626", fg_color="#ffffff", hover_bg="#ef4444", font=("Helvetica", 11, "bold"), padx=12, pady=5)
-        self.btn_restart.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_restart = ModernButton(ctrl_frame, text="⚡ 手动强制重启 IOTA", command=self.manual_restart, bg_color="#dc2626", fg_color="#ffffff", hover_bg="#ef4444", font=self.font_btn, padx=10, pady=4)
+        self.btn_restart.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.btn_clean_reset = ModernButton(ctrl_frame, text="🧹 一键深度清理重置", command=self.confirm_deep_clean, bg_color="#b45309", fg_color="#ffffff", hover_bg="#d97706", font=("Helvetica", 11, "bold"), padx=11, pady=5)
-        self.btn_clean_reset.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_clean_reset = ModernButton(ctrl_frame, text="🧹 一键深度清理重置", command=self.confirm_deep_clean, bg_color="#b45309", fg_color="#ffffff", hover_bg="#d97706", font=self.font_btn, padx=10, pady=4)
+        self.btn_clean_reset.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.chk_caffeinate = tk.Checkbutton(ctrl_frame, text="☕ 防休眠常开", variable=self.caffeinate_var, font=("Helvetica", 11, "bold"), command=self.toggle_caffeinate)
-        self.chk_caffeinate.pack(side=tk.LEFT, padx=(4, 8))
+        self.chk_caffeinate = tk.Checkbutton(ctrl_frame, text="☕ 防休眠常开", variable=self.caffeinate_var, font=self.font_body_bold, command=self.toggle_caffeinate)
+        self.chk_caffeinate.pack(side=tk.LEFT, padx=(4, 6))
         self.widgets["chk_caffeinate_ctrl"] = self.chk_caffeinate
 
-        self.chk_key_only = tk.Checkbutton(ctrl_frame, text="只显核心事件", variable=self.filter_key_logs, font=("Helvetica", 11), command=self.on_filter_toggle)
+        self.chk_key_only = tk.Checkbutton(ctrl_frame, text="只显核心事件", variable=self.filter_key_logs, font=self.font_body, command=self.on_filter_toggle)
         self.chk_key_only.pack(side=tk.LEFT, padx=(4, 6))
         self.widgets["chk_key_ctrl"] = self.chk_key_only
 
-        self.chk_auto_scroll = tk.Checkbutton(ctrl_frame, text="自动滚屏", variable=self.auto_scroll_var, font=("Helvetica", 11), command=self.on_scroll_toggle)
+        self.chk_auto_scroll = tk.Checkbutton(ctrl_frame, text="自动滚屏", variable=self.auto_scroll_var, font=self.font_body, command=self.on_scroll_toggle)
         self.chk_auto_scroll.pack(side=tk.LEFT, padx=(4, 6))
         self.widgets["chk_scroll_ctrl"] = self.chk_auto_scroll
 
-        self.btn_clear_log = ModernButton(ctrl_frame, text="清屏", command=self.clear_ui_log, font=("Helvetica", 11, "bold"), padx=8, pady=4)
+        self.btn_clear_log = ModernButton(ctrl_frame, text="清屏", command=self.clear_ui_log, font=self.font_btn, padx=8, pady=3)
         self.btn_clear_log.pack(side=tk.RIGHT, padx=(6, 0))
 
         font_frame = tk.Frame(ctrl_frame)
         font_frame.pack(side=tk.RIGHT, padx=(4, 0))
         self.widgets["font_ctrl_frame"] = font_frame
 
-        self.btn_font_inc = ModernButton(font_frame, text="A+", command=lambda: self.change_font_size(1), font=("Helvetica", 11, "bold"), padx=8, pady=3)
+        self.btn_font_inc = ModernButton(font_frame, text="A+", command=lambda: self.change_font_size(1), font=self.font_btn, padx=6, pady=2)
         self.btn_font_inc.pack(side=tk.RIGHT, padx=(2, 0))
 
-        self.lbl_font_display = tk.Label(font_frame, text=f"{self.log_font_size}pt", font=("Menlo", 11, "bold"))
+        self.lbl_font_display = tk.Label(font_frame, text=f"{self.log_font_size}pt", font=self.font_mono_bold)
         self.lbl_font_display.pack(side=tk.RIGHT, padx=(3, 3))
         self.widgets["lbl_font_display"] = self.lbl_font_display
 
-        self.btn_font_dec = ModernButton(font_frame, text="A-", command=lambda: self.change_font_size(-1), font=("Helvetica", 11, "bold"), padx=8, pady=3)
+        self.btn_font_dec = ModernButton(font_frame, text="A-", command=lambda: self.change_font_size(-1), font=self.font_btn, padx=6, pady=2)
         self.btn_font_dec.pack(side=tk.RIGHT, padx=(2, 2))
 
-        lbl_font_tag = tk.Label(font_frame, text="字号:", font=("Helvetica", 11, "bold"))
+        lbl_font_tag = tk.Label(font_frame, text="日志字号:", font=self.font_body_bold)
         lbl_font_tag.pack(side=tk.RIGHT, padx=(0, 2))
         self.widgets["lbl_font_tag"] = lbl_font_tag
 
         # 参数配置栏
-        cfg_frame = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=6)
-        cfg_frame.pack(fill=tk.X, pady=(0, 10))
+        cfg_frame = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=5)
+        cfg_frame.pack(fill=tk.X, pady=(0, 8))
         self.widgets["card_cfg"] = cfg_frame
 
-        lbl_c1 = tk.Label(cfg_frame, text="僵尸判定 (小时):", font=("Helvetica", 11, "bold"))
+        lbl_c1 = tk.Label(cfg_frame, text="僵尸判定 (小时):", font=self.font_body_bold)
         lbl_c1.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c1"] = lbl_c1
 
-        self.entry_zombie_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_zombie_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=self.font_body_bold, justify="center")
         self.entry_zombie_stale.insert(0, str(self.config.get("zombie_stale_hours", 2)))
-        self.entry_zombie_stale.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
+        self.entry_zombie_stale.pack(side=tk.LEFT, padx=(0, 10), ipady=2)
         self.widgets["entry_zombie_stale"] = self.entry_zombie_stale
 
-        lbl_c2 = tk.Label(cfg_frame, text="彻底无日志假死 (分):", font=("Helvetica", 11, "bold"))
+        lbl_c2 = tk.Label(cfg_frame, text="彻底无日志假死 (分):", font=self.font_body_bold)
         lbl_c2.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c2"] = lbl_c2
 
-        self.entry_max_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_max_stale = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=self.font_body_bold, justify="center")
         self.entry_max_stale.insert(0, str(self.config.get("max_stale_minutes", 10)))
-        self.entry_max_stale.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
+        self.entry_max_stale.pack(side=tk.LEFT, padx=(0, 10), ipady=2)
         self.widgets["entry_max_stale"] = self.entry_max_stale
 
-        lbl_c3 = tk.Label(cfg_frame, text="冷却 (分):", font=("Helvetica", 11, "bold"))
+        lbl_c3 = tk.Label(cfg_frame, text="冷却 (分):", font=self.font_body_bold)
         lbl_c3.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c3"] = lbl_c3
 
-        self.entry_cooldown = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_cooldown = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=self.font_body_bold, justify="center")
         self.entry_cooldown.insert(0, str(self.config.get("cooldown_minutes", 3)))
-        self.entry_cooldown.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
+        self.entry_cooldown.pack(side=tk.LEFT, padx=(0, 10), ipady=2)
         self.widgets["entry_cooldown"] = self.entry_cooldown
 
-        lbl_c4 = tk.Label(cfg_frame, text="日志保留 (天):", font=("Helvetica", 11, "bold"))
+        lbl_c4 = tk.Label(cfg_frame, text="日志保留 (天):", font=self.font_body_bold)
         lbl_c4.pack(side=tk.LEFT, padx=(0, 4))
         self.widgets["cfg_lbl_c4"] = lbl_c4
 
-        self.entry_retention = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=("Helvetica", 11, "bold"), justify="center")
+        self.entry_retention = tk.Entry(cfg_frame, width=4, bd=1, relief="solid", font=self.font_body_bold, justify="center")
         self.entry_retention.insert(0, str(self.config.get("log_retention_days", 2)))
-        self.entry_retention.pack(side=tk.LEFT, padx=(0, 12), ipady=2)
+        self.entry_retention.pack(side=tk.LEFT, padx=(0, 10), ipady=2)
         self.widgets["entry_retention"] = self.entry_retention
 
-        self.btn_save = ModernButton(cfg_frame, text="💾 保存参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 11, "bold"), padx=10, pady=3)
+        self.btn_save = ModernButton(cfg_frame, text="💾 保存参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=self.font_btn, padx=10, pady=2)
         self.btn_save.pack(side=tk.LEFT)
 
-        self.btn_cloud_sync = ModernButton(cfg_frame, text="🌐 多机云监控", command=self.open_cloud_sync_dialog, bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0ea5e9", font=("Helvetica", 11, "bold"), padx=11, pady=3)
-        self.btn_cloud_sync.pack(side=tk.LEFT, padx=(10, 0))
+        self.btn_cloud_sync = ModernButton(cfg_frame, text="🌐 多机云监控", command=self.open_cloud_sync_dialog, bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0ea5e9", font=self.font_btn, padx=10, pady=2)
+        self.btn_cloud_sync.pack(side=tk.LEFT, padx=(8, 0))
 
-        self.btn_check_update = ModernButton(cfg_frame, text="🔄 检查更新", command=lambda: threading.Thread(target=lambda: self._check_update_worker(manual=True), daemon=True).start(), bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=("Helvetica", 11, "bold"), padx=11, pady=3)
-        self.btn_check_update.pack(side=tk.LEFT, padx=(10, 0))
+        self.btn_check_update = ModernButton(cfg_frame, text="🔄 检查更新", command=lambda: threading.Thread(target=lambda: self._check_update_worker(manual=True), daemon=True).start(), bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=self.font_btn, padx=10, pady=2)
+        self.btn_check_update.pack(side=tk.LEFT, padx=(8, 0))
 
         # 5. 实时日志展示区域
-        log_frame = tk.LabelFrame(main_frame, text=" 核心事件日志 (自动换行已开启) ", font=("Helvetica", 12, "bold"), padx=6, pady=6)
+        log_frame = tk.LabelFrame(main_frame, text=" 核心事件日志 (自动换行已开启) ", font=self.font_card_title, padx=6, pady=6)
         log_frame.pack(fill=tk.BOTH, expand=True)
         self.widgets["card_log"] = log_frame
 
@@ -2255,7 +2321,6 @@ class IotaWatchdogApp:
 
             _enable_clipboard(ent_name)
             _enable_clipboard(ent_token)
-            _enable_clipboard(ent_repo)
 
             def _toggle_token_visibility():
                 if ent_token.cget("show") == "*":

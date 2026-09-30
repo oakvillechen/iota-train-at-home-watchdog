@@ -776,8 +776,8 @@
       return `
         <div class="cyber-card ${borderColorClass} p-5 flex flex-col justify-between group">
           <div>
-            <!-- 头部：机器名 + 状态徽章 -->
-            <div class="flex items-start justify-between gap-2 mb-3">
+            <!-- 头部：机器名 + IP + 状态徽章 -->
+            <div class="flex items-start justify-between gap-2 mb-2.5">
               <div>
                 <h3 class="font-orbitron font-bold text-base text-white group-hover:text-cyan-400 transition-colors flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full ${pulseGlowClass}"></span>
@@ -793,25 +793,75 @@
               </div>
             </div>
 
+            <!-- 关键训练元数据标签 Strip: Run ID, Layer, Epoch -->
+            <div class="flex flex-wrap items-center gap-1.5 mb-3 text-[11px] font-mono">
+              <div class="px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/60 text-cyan-300 flex items-center gap-1">
+                <span class="text-[9px] text-cyan-500 font-bold uppercase font-rajdhani">RUN</span>
+                <span class="font-bold">${escapeHtml(m.run_id || '--')}</span>
+              </div>
+              <div class="px-2 py-0.5 rounded bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 flex items-center gap-1">
+                <span class="text-[9px] text-indigo-400 font-bold uppercase font-rajdhani">LAYER</span>
+                <span class="font-bold">${escapeHtml(m.layer || '--')}</span>
+              </div>
+              <div class="px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800/60 text-emerald-300 flex items-center gap-1">
+                <span class="text-[9px] text-emerald-400 font-bold uppercase font-rajdhani">EPOCH</span>
+                <span class="font-bold">${escapeHtml(m.epoch || '--')}</span>
+              </div>
+            </div>
+
             <!-- 当前阶段 Phase Banner -->
-            <div class="bg-black/50 border border-slate-800/80 rounded px-3 py-2 mb-4 flex items-center justify-between text-xs">
+            <div class="bg-black/50 border border-slate-800/80 rounded px-3 py-2 mb-3 flex items-center justify-between text-xs">
               <span class="text-slate-400 text-[11px] font-rajdhani uppercase tracking-wider">PHASE:</span>
               <span class="font-semibold ${isOff ? 'text-rose-400' : (isQueue ? 'text-amber-300' : 'text-cyan-300')} truncate ml-2">
                 ${escapeHtml(m.phase || (m.proc_running ? '正常运行中' : '进程未启动'))}
               </span>
             </div>
 
-            <!-- 核心参数指标网格 (2x2) -->
-            <div class="grid grid-cols-2 gap-2.5 mb-4 text-xs">
-              
-              <!-- 近 6 小时贡献 -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800">
-                <div class="text-[10px] text-slate-400 font-rajdhani uppercase">6H CONTRIBUTIONS</div>
-                <div class="text-sm font-orbitron font-bold text-emerald-400 mt-0.5">
-                  ${escapeHtml(m.recent_tokens || '--')}
+            <!-- 最近 3~4 个小时有效贡献 (每个小时明细展示) -->
+            <div class="bg-slate-900/80 rounded p-2.5 border border-slate-800 mb-3">
+              <div class="text-[10px] text-slate-400 font-rajdhani uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>HOURLY CONTRIBUTIONS (近 3 小时有效贡献明细)</span>
+                </span>
+                <span class="text-emerald-400 font-mono font-bold">${escapeHtml(m.recent_tokens || '--')} 6H SUM</span>
+              </div>
+              ${renderHourlyTokens(m.hourly_tokens)}
+            </div>
+
+            <!-- 结算状态 Strip: 最近一次结算记录 + 下一次结算时间 -->
+            <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
+              <!-- 最近一次结算 -->
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
+                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
+                  <span>LAST PAYOUT 结算记录</span>
+                  <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/50">${escapeHtml(m.last_payout?.status || '已结算')}</span>
+                </div>
+                <div class="text-sm font-orbitron font-bold text-emerald-400 mt-1">
+                  ${escapeHtml(m.last_payout?.amount_str || (m.last_payout?.amount ? m.last_payout.amount + ' Alpha' : '--'))}
+                </div>
+                <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                  ${escapeHtml(m.last_payout?.time_str || '--')}
                 </div>
               </div>
 
+              <!-- 下一次结算时间 -->
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
+                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
+                  <span>NEXT PAYOUT 下次结算</span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                </div>
+                <div class="text-sm font-orbitron font-bold text-cyan-300 mt-1">
+                  ${escapeHtml(m.next_payout?.time_str || '20:00 EDT')}
+                </div>
+                <div class="text-[10px] text-cyan-400 font-mono mt-0.5 truncate">
+                  ${renderNextPayoutCountdown(m.next_payout?.timestamp)}
+                </div>
+              </div>
+            </div>
+
+            <!-- 网络与测速指标 (2 列) -->
+            <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
               <!-- P2P 活跃邻居 -->
               <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800">
                 <div class="text-[10px] text-slate-400 font-rajdhani uppercase">PEER MESH</div>
@@ -822,17 +872,16 @@
               </div>
 
               <!-- 测速网速 (上行 / 下行) -->
-              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 col-span-2 flex items-center justify-between">
-                <div>
-                  <div class="text-[10px] text-slate-400 font-rajdhani uppercase">SPEEDTEST RATE</div>
-                  <div class="text-xs font-mono font-medium text-slate-200 mt-0.5 flex items-center gap-3">
-                    <span class="text-cyan-300">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
-                    <span class="text-indigo-300">⬇ ${escapeHtml(m.download_speed || '--')}</span>
-                  </div>
+              <div class="bg-slate-900/60 p-2.5 rounded border border-slate-800 flex flex-col justify-between">
+                <div class="text-[10px] text-slate-400 font-rajdhani uppercase flex items-center justify-between">
+                  <span>SPEEDTEST</span>
+                  ${m.speedtest_time ? `<span class="text-[9px] text-slate-500 font-mono">${escapeHtml(m.speedtest_time)}</span>` : ''}
                 </div>
-                ${m.speedtest_time ? `<div class="text-[10px] text-slate-500 font-mono">${escapeHtml(m.speedtest_time)}</div>` : ''}
+                <div class="text-xs font-mono font-medium text-slate-200 mt-0.5 flex items-center gap-2">
+                  <span class="text-cyan-300">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
+                  <span class="text-indigo-300">⬇ ${escapeHtml(m.download_speed || '--')}</span>
+                </div>
               </div>
-
             </div>
 
             <!-- 终端日志微型面板 (Cyber Terminal Strip) -->
@@ -860,6 +909,41 @@
           </div>
         </div>
       `;
+    }
+
+    function renderHourlyTokens(hourlyList) {
+      if (!Array.isArray(hourlyList) || hourlyList.length === 0) {
+        return `
+          <div class="text-[11px] text-slate-500 font-mono py-1 text-center">
+            暂无小时细分数据（等待链上统计采集...）
+          </div>
+        `;
+      }
+      return `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          ${hourlyList.map(h => `
+            <div class="bg-black/40 px-2 py-1.5 rounded border ${h.is_current ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-slate-800/80'} text-center">
+              <div class="text-[9px] font-mono text-slate-400 flex items-center justify-center gap-1">
+                ${h.is_current ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>' : ''}
+                <span>${escapeHtml(h.range)}</span>
+              </div>
+              <div class="text-xs font-orbitron font-bold ${h.is_current ? 'text-emerald-300' : 'text-slate-200'} mt-0.5">
+                ${escapeHtml(h.tokens)}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderNextPayoutCountdown(nextTs) {
+      if (!nextTs) return "每日 20:00 结算";
+      const nowTs = Math.floor(Date.now() / 1000);
+      const diff = nextTs - nowTs;
+      if (diff <= 0) return "结算执行中...";
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
+      return `倒计时 ${hrs}时${mins}分`;
     }
 
     function escapeHtml(str) {

@@ -271,6 +271,9 @@ class IotaWatchdogApp:
         self.cur_cycle_tokens_str = ""
         self.last_cloud_sync_time = 0
         self.last_cloud_sync_msg = "未初始化"
+        self.recent_hourly_tokens = []
+        self.last_payout_info = {}
+        self.next_payout_info = {}
 
         self.widgets = {}
 
@@ -714,8 +717,30 @@ class IotaWatchdogApp:
                     dt_str = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
                     st_str = "已结算" if st == "settled" else st
                     payout_lines.append(f"● {dt_str} EDT: {amt:.3f} Alpha ({st_str})")
+
+                last_amt = amounts[-1]
+                last_ts = timestamps[-1]
+                last_st = statuses[-1] if statuses else "settled"
+                dt_str = datetime.fromtimestamp(last_ts).strftime("%m-%d %H:%M")
+                st_str = "已结算" if last_st == "settled" else last_st
+                self.last_payout_info = {
+                    "amount": round(float(last_amt), 3),
+                    "amount_str": f"{float(last_amt):.3f} Alpha",
+                    "timestamp": last_ts,
+                    "time_str": f"{dt_str} EDT",
+                    "status": st_str,
+                    "display": f"{float(last_amt):.3f} Alpha ({st_str}) · {dt_str} EDT"
+                }
             else:
                 payout_lines.append("暂无历史结算发放记录")
+
+            if getattr(self, "next_payout_ts", None):
+                next_dt_str = datetime.fromtimestamp(self.next_payout_ts).strftime("%m-%d %H:%M")
+                self.next_payout_info = {
+                    "timestamp": self.next_payout_ts,
+                    "time_str": f"{next_dt_str} EDT",
+                    "display": f"{next_dt_str} EDT"
+                }
 
             # 聚合多 Run 计算有效 Token 贡献量（按 20:00 结算周期统计近 3 天对比，以及最近 6 小时每小时贡献）
             token_lines = []
@@ -858,6 +883,23 @@ class IotaWatchdogApp:
             cur_delta = get_range_tokens(cur_hour_start, now)
             tot_with_current = sum_6h + cur_delta
             self.last_6h_total_str = f"{tot_with_current/10000:.2f}万"
+
+            # 结构化存储最近各小时贡献 (当前进行中小时 + 最近 3 个完整整小时)
+            recent_hourly = []
+            recent_hourly.append({
+                "range": f"{cur_hour_start.strftime('%H:00')}~{now.strftime('%H:%M')}",
+                "tokens": f"{cur_delta/10000:.2f}万",
+                "tokens_num": round(cur_delta / 10000.0, 2),
+                "is_current": True
+            })
+            for s, e, delta in reversed(hourly_items[-3:]):
+                recent_hourly.append({
+                    "range": f"{s}~{e}",
+                    "tokens": f"{delta/10000:.2f}万",
+                    "tokens_num": round(delta / 10000.0, 2),
+                    "is_current": False
+                })
+            self.recent_hourly_tokens = recent_hourly
 
             s_cur = cur_hour_start.strftime("%H:00")
             e_cur = now.strftime("%H:%M")
@@ -2040,6 +2082,37 @@ class IotaWatchdogApp:
                             last_log = lines[-1]
             except Exception:
                 pass
+        # 解析 layer, run_id, epoch
+        layer = getattr(self, "current_layer", "")
+        if not layer or "检测" in layer:
+            if hasattr(self, "lbl_node_phase"):
+                lbl_txt = self.lbl_node_phase.cget("text")
+                m_l = re.search(r"Layer\s*\d+", lbl_txt, re.IGNORECASE)
+                if m_l:
+                    layer = m_l.group(0)
+
+        epoch = getattr(self, "current_epoch", "")
+        if not epoch or "检测" in epoch:
+            if hasattr(self, "lbl_node_phase"):
+                lbl_txt = self.lbl_node_phase.cget("text")
+                m_e = re.search(r"Epoch\s*\d+", lbl_txt, re.IGNORECASE)
+                if m_e:
+                    epoch = m_e.group(0)
+
+        run_id = getattr(self, "current_run_id", "")
+        if not run_id or "检测" in run_id:
+            try:
+                for lf in sorted(glob.glob(os.path.join(LOG_DIR, "*cli.log")), reverse=True):
+                    with open(lf, "r", errors="ignore") as f:
+                        for l in f:
+                            m_r = re.search(r"4\.12\.16\.\d+-tah", l)
+                            if m_r:
+                                run_id = m_r.group(0)
+                                break
+                    if run_id: break
+            except Exception:
+                pass
+
         if not last_log:
             last_log = "节点正常运行中"
 
@@ -2047,6 +2120,9 @@ class IotaWatchdogApp:
             "status": status,
             "phase": phase,
             "proc_running": proc_running,
+            "layer": layer or "--",
+            "run_id": run_id or "--",
+            "epoch": epoch or "--",
             "queue_pos": self.last_queue_position or 0,
             "upload_speed": getattr(self, "last_upload_speed", "--"),
             "download_speed": getattr(self, "last_download_speed", "--"),
@@ -2055,12 +2131,16 @@ class IotaWatchdogApp:
             "restart_count": getattr(self, "restart_count", 0),
             "recent_tokens": recent_tokens,
             "cycle_tokens": cycle_tokens,
+            "hourly_tokens": getattr(self, "recent_hourly_tokens", []),
+            "last_payout": getattr(self, "last_payout_info", {}),
+            "next_payout": getattr(self, "next_payout_info", {}),
             "last_log": last_log
         }
 
     def _cloud_sync_loop(self):
         """后台守护线程：定时将状态同步至 GitHub 仓库供网页端集群监控"""
         first_sync = True
+        time.sleep(3)
         while getattr(self, "running", True):
             try:
                 if self.config.get("cloud_sync_enabled", False):

@@ -93,6 +93,9 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
         "status": status_dict.get("status", "running"),
         "phase": status_dict.get("phase", "正常运行中"),
         "proc_running": status_dict.get("proc_running", True),
+        "layer": status_dict.get("layer", "--"),
+        "run_id": status_dict.get("run_id", "--"),
+        "epoch": status_dict.get("epoch", "--"),
         "queue_pos": status_dict.get("queue_pos", 0),
         "upload_speed": status_dict.get("upload_speed", "--"),
         "download_speed": status_dict.get("download_speed", "--"),
@@ -101,6 +104,9 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
         "restart_count": status_dict.get("restart_count", 0),
         "recent_tokens": status_dict.get("recent_tokens", "--"),
         "cycle_tokens": status_dict.get("cycle_tokens", "--"),
+        "hourly_tokens": status_dict.get("hourly_tokens", []),
+        "last_payout": status_dict.get("last_payout", {}),
+        "next_payout": status_dict.get("next_payout", {}),
         "last_log": status_dict.get("last_log", "暂无最新日志")
     }
 

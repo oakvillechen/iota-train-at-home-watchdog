@@ -15,6 +15,11 @@ except Exception:
     iota_cluster_sync = None
 
 try:
+    import updater
+except Exception:
+    updater = None
+
+try:
     import tkinter as tk
     from tkinter import messagebox, scrolledtext
 except ModuleNotFoundError:
@@ -23,7 +28,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -37,7 +42,10 @@ DEFAULT_CONFIG = {
     "auto_watchdog_enabled": True,
     "filter_key_logs_only": True,
     "auto_scroll": True,
-    "dark_mode": True,
+    "dark_mode": False,
+    "ui_theme": "light",
+    "auto_check_update": True,
+    "skipped_version": "",
     "caffeinate_enabled": True,
     "log_font_size": 12,
     "log_retention_days": 2,
@@ -266,6 +274,7 @@ class IotaWatchdogApp:
         self.recent_hourly_tokens = []
         self.last_payout_info = {}
         self.next_payout_info = {}
+        self.pending_update_info = None
 
         self.widgets = {}
 
@@ -317,6 +326,8 @@ class IotaWatchdogApp:
         threading.Thread(target=self._cloud_sync_loop, daemon=True).start()
         self.root.after(500, lambda: self.trigger_fetch_payout(manual=False))
         self.root.after(1000, self._tick_countdown)
+        if self.config.get("auto_check_update", True):
+            self.root.after(2000, lambda: threading.Thread(target=lambda: self._check_update_worker(manual=False), daemon=True).start())
 
     def get_queue_status_text(self, wait_mins=0.0):
         if self.last_queue_position is None:
@@ -1080,6 +1091,8 @@ class IotaWatchdogApp:
                     w.config(bg=t["bg_card"], fg=t["fg_title"] if isinstance(w, tk.LabelFrame) else None)
                 elif name.startswith("subcard_"):
                     w.config(bg=t["bg_subcard"] if "metrics" not in name and "bottom" not in name else t["bg_card"])
+                elif name == "banner_update":
+                    w.config(bg="#1e1b4b" if self.dark_mode else "#e0e7ff")
                 elif name == "banner_zombie":
                     w.config(bg="#450a0a" if self.dark_mode else "#fee2e2")
                 else:
@@ -1105,6 +1118,8 @@ class IotaWatchdogApp:
                     w.config(bg=t["bg_card"], fg=t["fg_muted"])
                 elif name == "lbl_payout_countdown":
                     w.config(bg=t["bg_card"], fg="#38bdf8" if self.dark_mode else "#0284c7")
+                elif name == "lbl_update_msg":
+                    w.config(bg="#1e1b4b" if self.dark_mode else "#e0e7ff", fg="#a5b4fc" if self.dark_mode else "#3730a3")
                 elif name == "lbl_zombie_msg":
                     w.config(bg="#450a0a" if self.dark_mode else "#fee2e2", fg="#fca5a5" if self.dark_mode else "#991b1b")
                 elif name.startswith("lbl_payout_") or name in ["lbl_dt_title", "lbl_ph_title", "lbl_daily_tokens", "lbl_payout_history"]:
@@ -1396,6 +1411,27 @@ class IotaWatchdogApp:
         self.lbl_watchdog_status = tk.Label(top_row, text="● 自动守护中", font=("Helvetica", 13, "bold"), fg="#16a34a")
         self.lbl_watchdog_status.pack(side=tk.RIGHT)
         self.widgets["lbl_watchdog_status"] = self.lbl_watchdog_status
+
+        # 1.0 自动更新通知横幅 (默认隐藏，后台探测到新版时置顶提示)
+        banner_update = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=8)
+        self.banner_update = banner_update
+        self.widgets["banner_update"] = banner_update
+
+        lbl_update_msg = tk.Label(banner_update, text="", font=("Helvetica", 11, "bold"), justify="left", anchor="w")
+        lbl_update_msg.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.lbl_update_msg = lbl_update_msg
+        self.widgets["lbl_update_msg"] = lbl_update_msg
+
+        self.btn_update_now = ModernButton(banner_update, text="🚀 立即更新", command=self.perform_auto_update, bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=("Helvetica", 11, "bold"), padx=10, pady=4)
+        self.btn_update_now.pack(side=tk.RIGHT, padx=(6, 0))
+
+        self.btn_update_later = ModernButton(banner_update, text="稍后", command=self.hide_update_banner, bg_color="#64748B", fg_color="#ffffff", hover_bg="#475569", font=("Helvetica", 11, "bold"), padx=8, pady=4)
+        self.btn_update_later.pack(side=tk.RIGHT, padx=(6, 0))
+
+        self.btn_update_skip = ModernButton(banner_update, text="跳过此版本", command=self.skip_update_version, bg_color="#475569", fg_color="#cbd5e1", hover_bg="#334155", font=("Helvetica", 10), padx=8, pady=4)
+        self.btn_update_skip.pack(side=tk.RIGHT, padx=(6, 0))
+
+        self.banner_update.pack_forget()
 
         # 1.1 疑似僵尸状态告警横幅 (P0 核心需求，默认隐藏)
         banner_zombie = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=10)
@@ -1709,6 +1745,9 @@ class IotaWatchdogApp:
 
         self.btn_cloud_sync = ModernButton(cfg_frame, text="🌐 多机云监控", command=self.open_cloud_sync_dialog, bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0ea5e9", font=("Helvetica", 11, "bold"), padx=11, pady=3)
         self.btn_cloud_sync.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.btn_check_update = ModernButton(cfg_frame, text="🔄 检查更新", command=lambda: threading.Thread(target=lambda: self._check_update_worker(manual=True), daemon=True).start(), bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=("Helvetica", 11, "bold"), padx=11, pady=3)
+        self.btn_check_update.pack(side=tk.LEFT, padx=(10, 0))
 
         # 5. 实时日志展示区域
         log_frame = tk.LabelFrame(main_frame, text=" 核心事件日志 (自动换行已开启) ", font=("Helvetica", 12, "bold"), padx=6, pady=6)
@@ -2627,6 +2666,166 @@ class IotaWatchdogApp:
                 pass
 
             time.sleep(self.config.get("check_interval_seconds", 15))
+
+    # ---------------- 自动更新相关业务逻辑 ----------------
+    def _check_update_worker(self, manual=False):
+        """后台检查更新线程"""
+        if not manual and not self.config.get("auto_check_update", True):
+            return
+
+        if not updater:
+            if manual:
+                self.root.after(0, lambda: messagebox.showwarning("检查更新", "updater 模块未加载，无法执行自动更新。"))
+            return
+
+        try:
+            repo = self.config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog")
+            token = self.config.get("github_token") or None
+            res = updater.check_for_updates(
+                repo=repo,
+                token=token,
+                timeout=10,
+                current_version=APP_VERSION
+            )
+
+            if res.get("error"):
+                if manual:
+                    self.root.after(0, lambda: messagebox.showwarning("检查更新", f"检查更新失败: {res.get('error')}"))
+                return
+
+            if not res.get("has_update"):
+                if manual:
+                    self.root.after(0, lambda: messagebox.showinfo("检查更新", f"当前已是最新版本 (v{res.get('local_version')})"))
+                return
+
+            remote_ver = res.get("remote_version")
+            skipped_ver = self.config.get("skipped_version", "")
+            if not manual and skipped_ver == remote_ver:
+                return
+
+            if not res.get("has_mac_zip"):
+                self.root.after(0, lambda: self.append_watchdog_log(f"ℹ️ 发现新版本 v{remote_ver}，但暂无 macOS 构建包。"))
+                if manual:
+                    self.root.after(0, lambda: messagebox.showinfo("检查更新", f"发现新版本 v{remote_ver}，但 Release 中暂未挂载 macOS 构建包，请稍后再试。"))
+                return
+
+            self.pending_update_info = res
+            self.root.after(0, lambda: self.show_update_banner(res))
+
+        except Exception as e:
+            if manual:
+                self.root.after(0, lambda: messagebox.showerror("检查更新", f"更新检查发生异常: {e}"))
+
+    def show_update_banner(self, info):
+        """显示顶部更新提示横幅"""
+        remote_v = info.get("remote_version", "")
+        local_v = info.get("local_version", APP_VERSION)
+        size_mb = round(info.get("zip_size", 0) / (1024 * 1024), 1)
+        size_str = f" ({size_mb}MB)" if size_mb > 0 else ""
+
+        self.lbl_update_msg.config(text=f"🚀 发现全新版本 v{remote_v}{size_str} (当前: v{local_v})，支持一键无感热更新！")
+        self.btn_update_now.config(text="🚀 立即更新")
+        self.btn_update_now.set_colors("#4F46E5", "#ffffff", "#4338CA")
+        self.btn_update_now.command = self.perform_auto_update
+        self.btn_update_later.pack(side=tk.RIGHT, padx=(6, 0))
+        self.btn_update_skip.pack(side=tk.RIGHT, padx=(6, 0))
+
+        target_widget = self.widgets.get("banner_zombie") or self.widgets.get("card_status")
+        if target_widget and target_widget.winfo_exists():
+            self.banner_update.pack(before=target_widget, fill=tk.X, pady=(0, 8))
+        else:
+            self.banner_update.pack(fill=tk.X, pady=(0, 8))
+
+    def hide_update_banner(self):
+        """隐藏更新横幅"""
+        self.banner_update.pack_forget()
+
+    def skip_update_version(self):
+        """跳过当前版本更新"""
+        if hasattr(self, "pending_update_info") and self.pending_update_info:
+            skipped = self.pending_update_info.get("remote_version", "")
+            if skipped:
+                self.config["skipped_version"] = skipped
+                save_config(self.config)
+                self.append_watchdog_log(f"已跳过版本 v{skipped} 的后续自动提示。")
+        self.hide_update_banner()
+
+    def perform_auto_update(self):
+        """开始下载并自动更新"""
+        if not hasattr(self, "pending_update_info") or not self.pending_update_info:
+            return
+
+        self.btn_update_now.config(text="⏳ 正在准备...")
+        self.btn_update_now.command = None
+        self.btn_update_later.pack_forget()
+        self.btn_update_skip.pack_forget()
+
+        threading.Thread(target=self._download_and_install_worker, daemon=True).start()
+
+    def _download_and_install_worker(self):
+        """后台下载、校验并部署线程"""
+        info = self.pending_update_info
+        remote_ver = info.get("remote_version")
+        zip_url = info.get("zip_url")
+        sha_url = info.get("sha_url")
+
+        os.makedirs(updater.CACHE_DIR, exist_ok=True)
+        dest_zip = os.path.join(updater.CACHE_DIR, f"IOTA-Watchdog-v{remote_ver}.zip")
+
+        def _on_progress(pct, downloaded, total):
+            mb_done = downloaded / (1024 * 1024)
+            mb_tot = total / (1024 * 1024) if total > 0 else 0
+            pct_int = int(pct * 100)
+            txt = f"⬇️ 正在下载 v{remote_ver}... {pct_int}% ({mb_done:.1f}MB / {mb_tot:.1f}MB)"
+            self.root.after(0, lambda: self.lbl_update_msg.config(text=txt))
+
+        try:
+            self.append_watchdog_log(f"⬇️ 开始下载更新包 v{remote_ver}...")
+            updater.download_file_with_progress(zip_url, dest_zip, progress_callback=_on_progress)
+
+            self.root.after(0, lambda: self.lbl_update_msg.config(text=f"🔒 正在校验 SHA256 完整性..."))
+            self.append_watchdog_log(f"🔒 正在校验更新包 SHA256 签名...")
+            if not updater.verify_file_sha256(dest_zip, sha_url):
+                if os.path.exists(dest_zip):
+                    os.remove(dest_zip)
+                self.root.after(0, lambda: self._on_update_failed("更新包 SHA256 校验失败，文件可能已损坏，更新终止。"))
+                return
+
+            self.root.after(0, lambda: self.lbl_update_msg.config(text=f"📦 正在解压并更新版本链接..."))
+            self.append_watchdog_log(f"📦 正在部署至 ~/Applications/IOTA-Watchdog/versions/{remote_ver} 并切换 Current 链接...")
+            updater.install_and_symlink(dest_zip, remote_ver)
+
+            self.root.after(0, lambda: self._on_update_ready(remote_ver))
+
+        except Exception as e:
+            self.root.after(0, lambda: self._on_update_failed(str(e)))
+
+    def _on_update_ready(self, version):
+        """更新部署完毕，通知用户重启"""
+        self.lbl_update_msg.config(text=f"🎉 v{version} 已就绪！点击右侧按钮立即无缝切换新版。")
+        self.btn_update_now.config(text="🔄 立即重启应用")
+        self.btn_update_now.set_colors("#16a34a", "#ffffff", "#15803d")
+        self.btn_update_now.command = self._do_restart_new_app
+        self.append_watchdog_log(f"✅ 新版本 v{version} 已原子翻转就绪！请点击横幅重启应用。")
+
+    def _do_restart_new_app(self):
+        """退出当前程序并拉起新版本"""
+        self.append_watchdog_log("🚀 正在退出并启动新版本 IOTA Watchdog...")
+        try:
+            updater.restart_to_new_app()
+        except Exception as e:
+            self.append_watchdog_log(f"❌ 自动重启失败: {e}，请通过 ~/Applications/IOTA-Watchdog/launcher.sh 手动启动。")
+            messagebox.showerror("重启失败", f"无法自动启动新版: {e}\n请使用 ~/Applications/IOTA-Watchdog/launcher.sh 启动。")
+
+    def _on_update_failed(self, err_msg):
+        """更新失败回调"""
+        self.lbl_update_msg.config(text=f"❌ 更新失败: {err_msg}")
+        self.btn_update_now.config(text="重试")
+        self.btn_update_now.set_colors("#dc2626", "#ffffff", "#b91c1c")
+        self.btn_update_now.command = self.perform_auto_update
+        self.btn_update_later.pack(side=tk.RIGHT, padx=(6, 0))
+        self.append_watchdog_log(f"❌ 自动更新失败: {err_msg}")
+        messagebox.showerror("更新失败", f"更新过程中遇到问题:\n{err_msg}")
 
 if __name__ == "__main__":
     root = tk.Tk()

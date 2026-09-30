@@ -27,18 +27,28 @@ jobs:
           "$PY_BIN" -m pip install --user -q pyinstaller || "$PY_BIN" -m pip install --user -q --break-system-packages pyinstaller
           "$PY_BIN" -m PyInstaller --version
 
-      - name: Build
-        run: bash build_app.sh
+      - name: Build macOS bundle
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            echo "Building from tag: $TAG_VER"
+            export APP_BUILD_VERSION="$TAG_VER"
+          fi
+          bash build_app.sh
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: IOTA-Watchdog-macOS
-          path: IOTA-Watchdog-macOS.zip
+          path: |
+            IOTA-Watchdog-macOS.zip
+            IOTA-Watchdog-macOS.zip.sha256
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: IOTA-Watchdog-macOS.zip
+          files: |
+            IOTA-Watchdog-macOS.zip
+            IOTA-Watchdog-macOS.zip.sha256
           generate_release_notes: true

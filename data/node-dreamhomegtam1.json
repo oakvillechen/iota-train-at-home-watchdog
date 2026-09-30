@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790803885,
-  "updated_at_str": "2026-09-30 17:31:25",
+  "updated_at": 1790804007,
+  "updated_at_str": "2026-09-30 17:33:27",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 72)",
   "proc_running": true,
@@ -16,31 +16,31 @@
   "speedtest_time": "",
   "peers_count": 6,
   "restart_count": 0,
-  "recent_tokens": "155.25万",
-  "cycle_tokens": "586.94万",
+  "recent_tokens": "157.93万",
+  "cycle_tokens": "589.18万",
   "hourly_tokens": [
     {
-      "range": "17:00~17:27",
-      "tokens": "7.81万",
-      "tokens_num": 7.81,
+      "range": "17:00~17:32",
+      "tokens": "10.15万",
+      "tokens_num": 10.15,
       "is_current": true
     },
     {
       "range": "16:00~17:00",
-      "tokens": "24.50万",
-      "tokens_num": 24.5,
+      "tokens": "23.25万",
+      "tokens_num": 23.25,
       "is_current": false
     },
     {
       "range": "15:00~16:00",
-      "tokens": "25.41万",
-      "tokens_num": 25.41,
+      "tokens": "25.17万",
+      "tokens_num": 25.17,
       "is_current": false
     },
     {
       "range": "14:00~15:00",
-      "tokens": "28.53万",
-      "tokens_num": 28.53,
+      "tokens": "29.93万",
+      "tokens_num": 29.93,
       "is_current": false
     }
   ],
@@ -57,5 +57,5 @@
     "time_str": "09-30 20:00 EDT",
     "display": "09-30 20:00 EDT"
   },
-  "last_log": "[2026-09-30 17:31:23.697] [info]  2026-09-30 17:31:23.696 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"ad758086-5f25-4940-9a8a-8674ec7525e1\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790803883.685142, \"metadata\": {\"activation_id\": \"5e1cd9a2-b96a-4cc6-9a0e-0b7b8c811c7d\", \"direction\": \"backward\"}, \"duration\": 5.889580965042114, \"memory\": {\"mps_allocated_gb\": 2.915019989013672, \"cpu_ram_gb\": 0.532989501953125}}"
+  "last_log": "[2026-09-30 17:33:22.291] [info]  2026-09-30 17:33:22.291 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"16e070dc-11c6-4086-9a67-21583b7da0b0\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790804001.7722838, \"metadata\": {\"activation_id\": \"2aede126-3cee-449d-bd30-87ad4082ff0d\", \"direction\": \"backward\"}, \"duration\": 4.923617601394653, \"memory\": {\"mps_allocated_gb\": 8.139675855636597, \"cpu_ram_gb\": 0.601898193359375}}"
 }

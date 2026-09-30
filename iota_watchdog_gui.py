@@ -81,44 +81,36 @@ KEY_LOG_KEYWORDS = [
     "Received activations", "Cache size", "cache size of"
 ]
 
-THEMES = {
-    "dark": {
-        "bg_root": "#0b0f19",
-        "bg_card": "#161f30",
-        "bg_subcard": "#1f2c42",
-        "border": "#2d3d54",
-        "fg_title": "#f8fafc",
-        "fg_text": "#e2e8f0",
-        "fg_muted": "#94a3b8",
-        "entry_bg": "#0b0f19",
-        "entry_fg": "#38bdf8",
-        "btn_neutral_bg": "#2d3d54",
-        "btn_neutral_hover": "#3b506e",
-        "btn_neutral_fg": "#f8fafc",
-        "btn_exit_bg": "#dc2626",
-        "btn_exit_hover": "#ef4444",
-        "log_bg": "#030712",
-        "log_fg": "#f8fafc",
-    },
-    "light": {
-        "bg_root": "#f1f5f9",
-        "bg_card": "#ffffff",
-        "bg_subcard": "#f8fafc",
-        "border": "#cbd5e1",
-        "fg_title": "#0f172a",
-        "fg_text": "#1e293b",
-        "fg_muted": "#64748b",
-        "entry_bg": "#f8fafc",
-        "entry_fg": "#1d4ed8",
-        "btn_neutral_bg": "#e2e8f0",
-        "btn_neutral_hover": "#cbd5e1",
-        "btn_neutral_fg": "#0f172a",
-        "btn_exit_bg": "#ef4444",
-        "btn_exit_hover": "#dc2626",
-        "log_bg": "#0f172a",
-        "log_fg": "#f8fafc",
+try:
+    import theme
+    THEMES = theme.THEMES
+except Exception:
+    THEMES = {
+        "light": {
+            "bg_root": "#F4F6FA", "bg_card": "#FFFFFF", "bg_subcard": "#F8FAFC", "border": "#E6E9F0",
+            "fg_title": "#141A26", "fg_text": "#141A26", "fg_muted": "#5A6577",
+            "entry_bg": "#FFFFFF", "entry_fg": "#4F46E5",
+            "btn_neutral_bg": "#ECEEFE", "btn_neutral_hover": "#E0E3FA", "btn_neutral_fg": "#4F46E5",
+            "btn_exit_bg": "#E02424", "btn_exit_hover": "#C81E1E",
+            "log_bg": "#0F172A", "log_fg": "#F8FAFC"
+        },
+        "dark": {
+            "bg_root": "#0B0D13", "bg_card": "#12151F", "bg_subcard": "#171B26", "border": "#222839",
+            "fg_title": "#EDEFF5", "fg_text": "#EDEFF5", "fg_muted": "#9AA3B5",
+            "entry_bg": "#12151F", "entry_fg": "#8B93F8",
+            "btn_neutral_bg": "#222839", "btn_neutral_hover": "#2E374D", "btn_neutral_fg": "#EDEFF5",
+            "btn_exit_bg": "#DC2626", "btn_exit_hover": "#EF4444",
+            "log_bg": "#07090E", "log_fg": "#E2E8F0"
+        },
+        "midnight-neon": {
+            "bg_root": "#040711", "bg_card": "#080D1A", "bg_subcard": "#070B16", "border": "#00F2FE",
+            "fg_title": "#00F2FE", "fg_text": "#E2E8F0", "fg_muted": "#94A3B8",
+            "entry_bg": "#050811", "entry_fg": "#00F2FE",
+            "btn_neutral_bg": "#0E1A2E", "btn_neutral_hover": "#172A4B", "btn_neutral_fg": "#00F2FE",
+            "btn_exit_bg": "#FF0055", "btn_exit_hover": "#FF3377",
+            "log_bg": "#03060F", "log_fg": "#00F2FE"
+        }
     }
-}
 
 def load_config():
     if os.path.exists(CONFIG_FILE):

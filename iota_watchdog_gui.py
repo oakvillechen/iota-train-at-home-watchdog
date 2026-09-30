@@ -2003,7 +2003,7 @@ class IotaWatchdogApp:
     def get_current_telemetry_payload(self):
         """组装节点当前的全面监控遥测快照"""
         import socket
-        proc_running = self.is_process_running(APP_NAME)
+        proc_running, _ = self.check_process()
         phase = getattr(self, "current_layer", "待命")
         if hasattr(self, "lbl_node_phase"):
             lbl_txt = self.lbl_node_phase.cget("text")
@@ -2029,6 +2029,20 @@ class IotaWatchdogApp:
         recent_tokens = getattr(self, "last_6h_total_str", "") or "--"
         cycle_tokens = getattr(self, "cur_cycle_tokens_str", "") or "--"
 
+        last_log = getattr(self, "last_log_line", "").strip()
+        if not last_log:
+            try:
+                latest_log = self.get_latest_log()
+                if latest_log and os.path.exists(latest_log):
+                    with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:
+                        lines = [ln.strip() for ln in f.readlines()[-40:] if ln.strip()]
+                        if lines:
+                            last_log = lines[-1]
+            except Exception:
+                pass
+        if not last_log:
+            last_log = "节点正常运行中"
+
         return {
             "status": status,
             "phase": phase,
@@ -2041,22 +2055,31 @@ class IotaWatchdogApp:
             "restart_count": getattr(self, "restart_count", 0),
             "recent_tokens": recent_tokens,
             "cycle_tokens": cycle_tokens,
-            "last_log": getattr(self, "last_log_line", "节点正常运行中")
+            "last_log": last_log
         }
 
     def _cloud_sync_loop(self):
         """后台守护线程：定时将状态同步至 GitHub 仓库供网页端集群监控"""
+        first_sync = True
         while getattr(self, "running", True):
             try:
-                if self.config.get("cloud_sync_enabled", False) and iota_cluster_sync is not None:
-                    payload = self.get_current_telemetry_payload()
-                    ok, msg = iota_cluster_sync.upload_worker_status(self.config, payload)
-                    self.last_cloud_sync_time = time.time()
-                    self.last_cloud_sync_msg = msg
-                    if not ok:
-                        self.append_watchdog_log(f"⚠️ [云端同步] {msg}")
+                if self.config.get("cloud_sync_enabled", False):
+                    if iota_cluster_sync is None:
+                        self.last_cloud_sync_msg = "iota_cluster_sync 模块未载入"
+                    else:
+                        payload = self.get_current_telemetry_payload()
+                        ok, msg = iota_cluster_sync.upload_worker_status(self.config, payload)
+                        self.last_cloud_sync_time = time.time()
+                        self.last_cloud_sync_msg = msg
+                        if ok:
+                            if first_sync:
+                                self.append_watchdog_log(f"🌐 [云端监控] 状态已成功上报: {msg}")
+                                first_sync = False
+                        else:
+                            self.append_watchdog_log(f"⚠️ [云端同步失败] {msg}")
             except Exception as e:
                 self.last_cloud_sync_msg = str(e)
+                self.append_watchdog_log(f"⚠️ [云端同步异常] {e}")
 
             interval = max(15, int(self.config.get("cloud_sync_interval_seconds", 60)))
             time.sleep(interval)

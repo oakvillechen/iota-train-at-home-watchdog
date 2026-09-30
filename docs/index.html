@@ -546,37 +546,46 @@
       let nodes = [];
 
       try {
-        // 策略 1: 优先尝试直接从当前同源相对路径读取 ./data/ 目录 (如果是 GitHub Pages 部署)
-        // 策略 2: 调用 GitHub API 列出 data/ 目录下的所有 json 文件
-        const apiUrl = `https://api.github.com/repos/${appConfig.repo}/contents/data?ref=${appConfig.branch}`;
+        const apiUrl = `https://api.github.com/repos/${appConfig.repo}/contents/data?ref=${appConfig.branch}&_t=${Date.now()}`;
         const resp = await fetch(apiUrl, { headers });
 
         if (resp.ok) {
           const files = await resp.json();
           if (Array.isArray(files)) {
-            const fetchPromises = files
-              .filter(f => f.name.endsWith(".json"))
-              .map(async f => {
-                try {
-                  const res = await fetch(f.download_url);
-                  return await res.json();
-                } catch (e) {
-                  return null;
+            const validFiles = files.filter(f => 
+              f.name.endsWith(".json") && 
+              !f.name.toLowerCase().includes("sample") && 
+              !f.name.toLowerCase().includes("manifest")
+            );
+
+            const fetchPromises = validFiles.map(async f => {
+              try {
+                // 1. 优先使用 Git Blob API 以 raw 模式拉取最新内容 (天然绑定 blob sha，零 CDN 缓存延迟)
+                if (f.git_url) {
+                  const blobHeaders = { "Accept": "application/vnd.github.raw+json" };
+                  if (appConfig.token) {
+                    blobHeaders["Authorization"] = `Bearer ${appConfig.token}`;
+                  }
+                  const bRes = await fetch(f.git_url, { headers: blobHeaders });
+                  if (bRes.ok) return await bRes.json();
                 }
-              });
+                // 2. 备用：加时间戳参数以破除 raw.githubusercontent.com 缓存
+                const rawUrl = `${f.download_url}?_t=${Date.now()}`;
+                const rRes = await fetch(rawUrl);
+                if (rRes.ok) return await rRes.json();
+              } catch (e) {
+                console.warn("读取节点数据失败:", f.name, e);
+                return null;
+              }
+            });
             const results = await Promise.all(fetchPromises);
             nodes = results.filter(Boolean);
           }
         } else {
-          // 如果 API 失败（比如未认证达到 rate limit），尝试直接探测本地/同源 ./data/worker_sample.json
-          const sampleRes = await fetch(`./data/worker_sample.json`);
-          if (sampleRes.ok) {
-            const sampleData = await sampleRes.json();
-            nodes = [sampleData];
-          }
+          console.warn("GitHub API 返回非 200 响应:", resp.status);
         }
       } catch (err) {
-        console.warn("API 获取失败，尝试备用链路:", err);
+        console.warn("API 获取失败:", err);
       }
 
       minersData = nodes;
@@ -754,9 +763,15 @@
       }
 
       // 时间换算
-      const minsAgo = Math.floor(m.lastSeenAgo / 60);
-      const secsAgo = m.lastSeenAgo % 60;
-      const timeAgoStr = minsAgo > 0 ? `${minsAgo}分${secsAgo}秒前` : `${secsAgo}秒前`;
+      const safeAgo = Math.max(0, m.lastSeenAgo || 0);
+      const minsAgo = Math.floor(safeAgo / 60);
+      const secsAgo = safeAgo % 60;
+      let timeAgoStr = "刚刚";
+      if (minsAgo > 0) {
+        timeAgoStr = `${minsAgo}分${secsAgo}秒前`;
+      } else if (secsAgo > 5) {
+        timeAgoStr = `${secsAgo}秒前`;
+      }
 
       return `
         <div class="cyber-card ${borderColorClass} p-5 flex flex-col justify-between group">

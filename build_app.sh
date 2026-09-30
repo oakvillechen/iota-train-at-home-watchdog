@@ -18,6 +18,7 @@ echo "Packaging IOTA Watchdog.app with $PY_BIN..."
     --name "IOTA Watchdog" \
     --icon "AppIcon.icns" \
     --add-data "icon.png:." \
+    --hidden-import iota_cluster_sync \
     iota_watchdog_gui.py
 
 echo "Creating Zip bundle..."

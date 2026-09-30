@@ -582,7 +582,24 @@
             nodes = results.filter(Boolean);
           }
         } else {
-          console.warn("GitHub API 返回非 200 响应:", resp.status);
+          // 备用链路：当 GitHub API 达到匿名限额 (403) 时，直接读取 cluster_manifest.json 列表 (零 API 额度消耗，支持无上限访客并发)
+          try {
+            const manifestUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/cluster_manifest.json?_t=${Date.now()}`;
+            const mRes = await fetch(manifestUrl);
+            if (mRes.ok) {
+              const mData = await mRes.json();
+              const nodeIds = mData.nodes || [];
+              const rawPromises = nodeIds.map(async nid => {
+                const nUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/${nid}.json?_t=${Date.now()}`;
+                const nr = await fetch(nUrl);
+                return nr.ok ? await nr.json() : null;
+              });
+              const rawResults = await Promise.all(rawPromises);
+              nodes = rawResults.filter(Boolean);
+            }
+          } catch (mErr) {
+            console.warn("Manifest 回退失败:", mErr);
+          }
         }
       } catch (err) {
         console.warn("API 获取失败:", err);

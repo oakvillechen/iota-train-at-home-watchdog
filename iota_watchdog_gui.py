@@ -2063,121 +2063,141 @@ class IotaWatchdogApp:
 
     def open_cloud_sync_dialog(self):
         """打开多机云端监控配置窗口"""
-        import socket
-        dlg = tk.Toplevel(self.root)
-        dlg.title("🌐 多机云端监控配置 (Cyber Dashboard)")
-        dlg.geometry("540x480")
-        dlg.resizable(False, False)
-        dlg.transient(self.root)
-        dlg.grab_set()
+        try:
+            import socket
+            dlg = tk.Toplevel(self.root)
+            dlg.title("🌐 多机云端监控配置 (Cyber Dashboard)")
+            dlg.geometry("540x480")
+            dlg.resizable(False, False)
+            dlg.transient(self.root)
+            dlg.lift()
+            dlg.focus_force()
 
-        bg_main = "#0f172a" if self.dark_mode else "#f8fafc"
-        fg_main = "#f1f5f9" if self.dark_mode else "#0f172a"
-        entry_bg = "#1e293b" if self.dark_mode else "#ffffff"
-        entry_fg = "#38bdf8" if self.dark_mode else "#0369a1"
-        dlg.configure(bg=bg_main)
+            bg_main = "#0f172a" if self.dark_mode else "#f8fafc"
+            fg_main = "#f1f5f9" if self.dark_mode else "#0f172a"
+            entry_bg = "#1e293b" if self.dark_mode else "#ffffff"
+            entry_fg = "#38bdf8" if self.dark_mode else "#0369a1"
+            dlg.configure(bg=bg_main)
 
-        container = tk.Frame(dlg, bg=bg_main, padx=20, pady=16)
-        container.pack(fill=tk.BOTH, expand=True)
+            container = tk.Frame(dlg, bg=bg_main, padx=20, pady=16)
+            container.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(container, text="🌐 GitHub 集群实时监控上报", font=("Helvetica", 14, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(0, 4))
-        tk.Label(container, text="每台机器运行本程序并开启上报，即可在同一个 GitHub 网页中一览所有 Miner", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(anchor="w", pady=(0, 14))
+            tk.Label(container, text="🌐 GitHub 集群实时监控上报", font=("Helvetica", 14, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(0, 4))
+            tk.Label(container, text="每台机器运行本程序并开启上报，即可在同一个 GitHub 网页中一览所有 Miner", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(anchor="w", pady=(0, 14))
 
-        sync_var = tk.BooleanVar(value=self.config.get("cloud_sync_enabled", False))
-        chk_enable = tk.Checkbutton(container, text="开启本机自动上报至 GitHub 仓库", variable=sync_var, font=("Helvetica", 11, "bold"), bg=bg_main, fg="#10b981", activebackground=bg_main, selectcolor=entry_bg)
-        chk_enable.pack(anchor="w", pady=(0, 10))
+            sync_var = tk.BooleanVar(value=self.config.get("cloud_sync_enabled", False))
+            chk_enable = tk.Checkbutton(container, text="开启本机自动上报至 GitHub 仓库", variable=sync_var, font=("Helvetica", 11, "bold"), bg=bg_main, fg="#10b981", activebackground=bg_main, selectcolor=entry_bg)
+            chk_enable.pack(anchor="w", pady=(0, 10))
 
-        fields = tk.Frame(container, bg=bg_main)
-        fields.pack(fill=tk.X, pady=(0, 10))
+            fields = tk.Frame(container, bg=bg_main)
+            fields.pack(fill=tk.X, pady=(0, 10))
 
-        default_hostname = socket.gethostname().split(".")[0]
-        tk.Label(fields, text="机器显示别名 (如: 客厅 Mac Studio / MBP M3):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
-        ent_name = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
-        ent_name.insert(0, self.config.get("worker_name", "") or default_hostname)
-        ent_name.pack(fill=tk.X, ipady=3, pady=(0, 8))
+            default_hostname = socket.gethostname().split(".")[0]
+            tk.Label(fields, text="机器显示别名 (如: 客厅 Mac Studio / MBP M3):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
+            ent_name = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
+            ent_name.insert(0, self.config.get("worker_name", "") or default_hostname)
+            ent_name.pack(fill=tk.X, ipady=3, pady=(0, 8))
 
-        tk.Label(fields, text="GitHub Personal Access Token (PAT) [需 Contents: Read & Write 权限]:", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
-        ent_token = tk.Entry(fields, font=("Helvetica", 11), show="•", bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
-        ent_token.insert(0, self.config.get("github_token", ""))
-        ent_token.pack(fill=tk.X, ipady=3, pady=(0, 8))
+            token_label_frame = tk.Frame(fields, bg=bg_main)
+            token_label_frame.pack(fill=tk.X, pady=(2, 2))
+            tk.Label(token_label_frame, text="GitHub Personal Access Token (PAT):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
 
-        tk.Label(fields, text="GitHub 仓库名 (Owner/Repo):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
-        ent_repo = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
-        ent_repo.insert(0, self.config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog"))
-        ent_repo.pack(fill=tk.X, ipady=3, pady=(0, 8))
+            token_frame = tk.Frame(fields, bg=bg_main)
+            token_frame.pack(fill=tk.X, pady=(0, 8))
+            ent_token = tk.Entry(token_frame, font=("Helvetica", 11), show="*", bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
+            ent_token.insert(0, self.config.get("github_token", ""))
+            ent_token.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
 
-        row_int = tk.Frame(fields, bg=bg_main)
-        row_int.pack(fill=tk.X, pady=(2, 8))
-        tk.Label(row_int, text="上报频率 (秒):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
-        ent_interval = tk.Entry(row_int, width=6, font=("Helvetica", 11, "bold"), bg=entry_bg, fg=entry_fg, justify="center", bd=1, relief="solid")
-        ent_interval.insert(0, str(self.config.get("cloud_sync_interval_seconds", 60)))
-        ent_interval.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
-        tk.Label(row_int, text="(推荐 30~60 秒，避免频繁触发 Rate Limit)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
+            def _toggle_token_visibility():
+                if ent_token.cget("show") == "*":
+                    ent_token.config(show="")
+                    btn_view_token.config(text="🙈 隐藏")
+                else:
+                    ent_token.config(show="*")
+                    btn_view_token.config(text="👁️ 显示")
 
-        lbl_msg = tk.Label(container, text=f"上次上报状态: {getattr(self, 'last_cloud_sync_msg', '未上报')}", font=("Helvetica", 10), bg=bg_main, fg="#0ea5e9")
-        lbl_msg.pack(anchor="w", pady=(2, 10))
+            btn_view_token = tk.Button(token_frame, text="👁️ 显示", font=("Helvetica", 10), command=_toggle_token_visibility, bg=entry_bg, fg=fg_main, relief="flat", bd=1)
+            btn_view_token.pack(side=tk.RIGHT, padx=(4, 0))
 
-        btn_bar = tk.Frame(container, bg=bg_main)
-        btn_bar.pack(fill=tk.X, side=tk.BOTTOM, pady=(8, 0))
+            tk.Label(fields, text="GitHub 仓库名 (Owner/Repo):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
+            ent_repo = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
+            ent_repo.insert(0, self.config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog"))
+            ent_repo.pack(fill=tk.X, ipady=3, pady=(0, 8))
 
-        def _do_test():
-            token = ent_token.get().strip()
-            if not token:
-                messagebox.showwarning("提示", "请先填入 GitHub Token 再测试！", parent=dlg)
-                return
-            lbl_msg.config(text="正在连接 GitHub API 进行测试上报...", fg="#f59e0b")
-            dlg.update()
+            row_int = tk.Frame(fields, bg=bg_main)
+            row_int.pack(fill=tk.X, pady=(2, 8))
+            tk.Label(row_int, text="上报频率 (秒):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
+            ent_interval = tk.Entry(row_int, width=6, font=("Helvetica", 11, "bold"), bg=entry_bg, fg=entry_fg, justify="center", bd=1, relief="solid")
+            ent_interval.insert(0, str(self.config.get("cloud_sync_interval_seconds", 60)))
+            ent_interval.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
+            tk.Label(row_int, text="(推荐 30~60 秒，避免频繁触发 Rate Limit)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
 
-            temp_cfg = {
-                "github_token": token,
-                "github_repo": ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog",
-                "github_branch": self.config.get("github_branch", "main"),
-                "worker_name": ent_name.get().strip(),
-                "worker_id": f"node-{socket.gethostname().split('.')[0].lower()}"
-            }
-            payload = self.get_current_telemetry_payload()
-            if iota_cluster_sync is None:
-                messagebox.showerror("错误", "未能加载 iota_cluster_sync 模块", parent=dlg)
-                return
-            ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
-            if ok:
-                lbl_msg.config(text=f"✅ 测试成功: {res_msg}", fg="#10b981")
-                messagebox.showinfo("成功", f"🎉 上报测试成功！数据已推送至 {temp_cfg['github_repo']}/data/", parent=dlg)
-            else:
-                lbl_msg.config(text=f"❌ 失败: {res_msg}", fg="#ef4444")
-                messagebox.showerror("上报失败", f"测试失败，原因:\n{res_msg}", parent=dlg)
+            lbl_msg = tk.Label(container, text=f"上次上报状态: {getattr(self, 'last_cloud_sync_msg', '未上报')}", font=("Helvetica", 10), bg=bg_main, fg="#0ea5e9")
+            lbl_msg.pack(anchor="w", pady=(2, 10))
 
-        def _do_save():
-            self.config["cloud_sync_enabled"] = sync_var.get()
-            self.config["worker_name"] = ent_name.get().strip()
-            self.config["github_token"] = ent_token.get().strip()
-            self.config["github_repo"] = ent_repo.get().strip()
-            try:
-                self.config["cloud_sync_interval_seconds"] = max(15, int(ent_interval.get().strip()))
-            except ValueError:
-                self.config["cloud_sync_interval_seconds"] = 60
-            save_config(self.config)
-            self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
-            dlg.destroy()
+            btn_bar = tk.Frame(container, bg=bg_main)
+            btn_bar.pack(fill=tk.X, side=tk.BOTTOM, pady=(8, 0))
 
-        def _open_dashboard():
-            local_dash = os.path.join(LOG_DIR, "dashboard", "index.html")
-            if os.path.exists(local_dash):
-                webbrowser.open(f"file://{local_dash}")
-            else:
-                repo = ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog"
-                user = repo.split("/")[0] if "/" in repo else "oakvillechen"
-                repo_name = repo.split("/")[1] if "/" in repo else "iota-train-at-home-watchdog"
-                webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/")
+            def _do_test():
+                token = ent_token.get().strip()
+                if not token:
+                    messagebox.showwarning("提示", "请先填入 GitHub Token 再测试！", parent=dlg)
+                    return
+                lbl_msg.config(text="正在连接 GitHub API 进行测试上报...", fg="#f59e0b")
+                dlg.update()
 
-        btn_open = ModernButton(btn_bar, text="🌐 打开监控看板", command=_open_dashboard, bg_color="#6366f1", fg_color="#ffffff", hover_bg="#4f46e5", font=("Helvetica", 10, "bold"), padx=10, pady=5)
-        btn_open.pack(side=tk.LEFT)
+                temp_cfg = {
+                    "github_token": token,
+                    "github_repo": ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog",
+                    "github_branch": self.config.get("github_branch", "main"),
+                    "worker_name": ent_name.get().strip(),
+                    "worker_id": f"node-{socket.gethostname().split('.')[0].lower()}"
+                }
+                payload = self.get_current_telemetry_payload()
+                if iota_cluster_sync is None:
+                    messagebox.showerror("错误", "未能加载 iota_cluster_sync 模块", parent=dlg)
+                    return
+                ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
+                if ok:
+                    lbl_msg.config(text=f"✅ 测试成功: {res_msg}", fg="#10b981")
+                    messagebox.showinfo("成功", f"🎉 上报测试成功！数据已推送至 {temp_cfg['github_repo']}/data/", parent=dlg)
+                else:
+                    lbl_msg.config(text=f"❌ 失败: {res_msg}", fg="#ef4444")
+                    messagebox.showerror("上报失败", f"测试失败，原因:\n{res_msg}", parent=dlg)
 
-        btn_test = ModernButton(btn_bar, text="🚀 测试上报一次", command=_do_test, bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0ea5e9", font=("Helvetica", 10, "bold"), padx=10, pady=5)
-        btn_test.pack(side=tk.LEFT, padx=(8, 0))
+            def _do_save():
+                self.config["cloud_sync_enabled"] = sync_var.get()
+                self.config["worker_name"] = ent_name.get().strip()
+                self.config["github_token"] = ent_token.get().strip()
+                self.config["github_repo"] = ent_repo.get().strip()
+                try:
+                    self.config["cloud_sync_interval_seconds"] = max(15, int(ent_interval.get().strip()))
+                except ValueError:
+                    self.config["cloud_sync_interval_seconds"] = 60
+                save_config(self.config)
+                self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
+                dlg.destroy()
 
-        btn_save = ModernButton(btn_bar, text="💾 保存并退出", command=_do_save, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 10, "bold"), padx=12, pady=5)
-        btn_save.pack(side=tk.RIGHT)
+            def _open_dashboard():
+                local_dash = os.path.join(LOG_DIR, "dashboard", "index.html")
+                if os.path.exists(local_dash):
+                    webbrowser.open(f"file://{local_dash}")
+                else:
+                    repo = ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog"
+                    user = repo.split("/")[0] if "/" in repo else "oakvillechen"
+                    repo_name = repo.split("/")[1] if "/" in repo else "iota-train-at-home-watchdog"
+                    webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/")
+
+            btn_open = ModernButton(btn_bar, text="🌐 打开监控看板", command=_open_dashboard, bg_color="#6366f1", fg_color="#ffffff", hover_bg="#4f46e5", font=("Helvetica", 10, "bold"), padx=10, pady=5)
+            btn_open.pack(side=tk.LEFT)
+
+            btn_test = ModernButton(btn_bar, text="🚀 测试上报一次", command=_do_test, bg_color="#0284c7", fg_color="#ffffff", hover_bg="#0ea5e9", font=("Helvetica", 10, "bold"), padx=10, pady=5)
+            btn_test.pack(side=tk.LEFT, padx=(8, 0))
+
+            btn_save = ModernButton(btn_bar, text="💾 保存并退出", command=_do_save, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=("Helvetica", 10, "bold"), padx=12, pady=5)
+            btn_save.pack(side=tk.RIGHT)
+        except Exception as e:
+            messagebox.showerror("打开配置窗口异常", f"无法打开多机云监控窗口:\n{e}")
 
     def toggle_monitoring(self):
         self.is_monitoring = not self.is_monitoring

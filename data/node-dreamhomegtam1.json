@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790796349,
-  "updated_at_str": "2026-09-30 15:25:49",
+  "updated_at": 1790796410,
+  "updated_at_str": "2026-09-30 15:26:50",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 71)",
   "proc_running": true,
@@ -15,5 +15,5 @@
   "restart_count": 0,
   "recent_tokens": "154.78万",
   "cycle_tokens": "536.40万",
-  "last_log": "[2026-09-30 15:25:46.579] [info]  2026-09-30 15:25:46.578 | WARNING  | miner.training.activation_publisher:_process_outbound_item:624 - Peer unreachable for backward activation 3ca2dbe7-beb0-4a98-bd72-bab830ab9f2b (connect timeout after 5s), re-enqueuing same target in 0.50s (tries=2/5) | peer=backward[1] layer=1 | req=- | conn=- open=- send=- recv=-"
+  "last_log": "[2026-09-30 15:26:49.054] [info]  2026-09-30 15:26:49.053 | DEBUG    | miner.p2p.stack:_enqueue_after_ack:325 - P2P /activation/push 6f9083b1-c8ce-4bf6-ad85-f37d141e4667 enqueued (peer=ad593ec45e31e291...)"
 }

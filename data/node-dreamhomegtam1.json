@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790802402,
-  "updated_at_str": "2026-09-30 17:06:42",
+  "updated_at": 1790802428,
+  "updated_at_str": "2026-09-30 17:07:08",
   "status": "training",
   "phase": "🟢 活跃通信中 (Layer 2)",
   "proc_running": true,
@@ -32,5 +32,5 @@
     "time_str": "09-30 20:00 EDT",
     "display": "09-30 20:00 EDT"
   },
-  "last_log": "[2026-09-30 17:06:39.955] [info]  2026-09-30 17:06:39.955 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"70645792-4d68-46e8-9f53-922e13a70c0d\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790802399.9469209, \"metadata\": {\"activation_id\": \"3aee472e-e099-4a92-bda9-60b3712f8f14\", \"direction\": \"backward\"}, \"duration\": 5.942875862121582, \"memory\": {\"mps_allocated_gb\": 4.293876886367798, \"cpu_ram_gb\": 0.5994110107421875}}"
+  "last_log": "[2026-09-30 17:07:05.758] [info]  2026-09-30 17:07:05.758 | SUCCESS  | miner.training.activation_publisher:_publish_loss:718 - Successfully published loss for activation 3775cfac-46ef-4eae-8bea-5b8944164f5c"
 }

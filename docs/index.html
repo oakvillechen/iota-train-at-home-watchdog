@@ -721,37 +721,38 @@
         console.warn("API 获取失败:", err);
       }
 
-      // 智能去重：以 Miner ID (链上唯一身份 Hotkey) 作为最高优先级主键！
-      // 机器显示别名仅用于展示，修改别名不会产生重复卡片
-      const sortedNodes = (nodes || []).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+      // 智能去重：以 Miner ID 为最高优先级，结合物理局域网 IP 与机器名归一化防重
+      // 保证 1 台物理设备有且仅有 1 张监控卡片，绝对杜绝别名变更或遗留文件导致的幽灵节点
+      const sortedNodes = (nodes || []).sort((a, b) => {
+        const aHasMid = !!(a.miner_id || a.miner_hotkey || (a.worker_id && a.worker_id.startsWith('miner-')));
+        const bHasMid = !!(b.miner_id || b.miner_hotkey || (b.worker_id && b.worker_id.startsWith('miner-')));
+        if (aHasMid !== bHasMid) return aHasMid ? -1 : 1;
+        return (b.updated_at || 0) - (a.updated_at || 0);
+      });
+
       const seenMinerIds = new Set();
       const seenIps = new Set();
       const seenWorkerIds = new Set();
+      const seenNormalizedNames = new Set();
       const dedupedNodes = [];
 
       for (const n of sortedNodes) {
         const mid = (n.miner_id || n.miner_hotkey || (n.worker_id && n.worker_id.startsWith('miner-') ? n.worker_id.replace('miner-', '') : '')).trim();
         const nip = (n.ip || '').trim();
         const wid = (n.worker_id || n.id || '').trim();
+        const normName = (n.worker_name || n.worker_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // 1. 若拥有 Miner ID，以 Miner ID 作为不可更改的全局唯一识别
-        if (mid) {
-          if (seenMinerIds.has(mid)) continue;
-          seenMinerIds.add(mid);
-          if (nip && nip !== '127.0.0.1') seenIps.add(nip);
-          if (wid) seenWorkerIds.add(wid);
-          dedupedNodes.push(n);
-          continue;
-        }
+        // 判定是否与已知节点重复（同一物理设备）：
+        if (mid && seenMinerIds.has(mid)) continue;
+        if (nip && nip !== '127.0.0.1' && nip !== '0.0.0.0' && seenIps.has(nip)) continue;
+        if (normName && normName.length >= 3 && seenNormalizedNames.has(normName)) continue;
+        if (wid && seenWorkerIds.has(wid)) continue;
 
-        // 2. 兜底：若暂未探测到 Miner ID，以物理 IP 或 worker_id 作为备用合并防重
-        if (nip && nip !== '127.0.0.1') {
-          if (seenIps.has(nip)) continue;
-          seenIps.add(nip);
-        } else if (wid) {
-          if (seenWorkerIds.has(wid)) continue;
-          seenWorkerIds.add(wid);
-        }
+        // 登记已占用的机器属性
+        if (mid) seenMinerIds.add(mid);
+        if (nip && nip !== '127.0.0.1' && nip !== '0.0.0.0') seenIps.add(nip);
+        if (normName && normName.length >= 3) seenNormalizedNames.add(normName);
+        if (wid) seenWorkerIds.add(wid);
 
         dedupedNodes.push(n);
       }

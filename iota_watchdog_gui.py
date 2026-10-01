@@ -237,6 +237,23 @@ class IotaWatchdogApp:
                         self.miner_hotkey = hk_data["ss58Address"]
             except Exception:
                 pass
+
+        # 确立并持久化 Miner ID 作为永久唯一身份
+        actual_wid = self.get_worker_identity()
+        old_wid = self.config.get("worker_id", "")
+        if old_wid != actual_wid:
+            self.config["worker_id"] = actual_wid
+            save_config(self.config)
+            if old_wid and old_wid.startswith("node-") and actual_wid.startswith("miner-"):
+                def _cleanup_old_file():
+                    try:
+                        time.sleep(3)
+                        global iota_cluster_sync
+                        if iota_cluster_sync and hasattr(iota_cluster_sync, "delete_worker_file"):
+                            iota_cluster_sync.delete_worker_file(self.config, old_wid)
+                    except Exception:
+                        pass
+                threading.Thread(target=_cleanup_old_file, daemon=True).start()
         self.payout_coldkey = "检测中..."
         self.current_layer = "检测中..."
         self.current_network = "IOTA Bittensor Subnet"

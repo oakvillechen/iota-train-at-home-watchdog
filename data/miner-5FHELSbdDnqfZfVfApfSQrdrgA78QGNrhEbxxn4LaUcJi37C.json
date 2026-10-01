@@ -4,8 +4,8 @@
   "worker_id": "miner-5FHELSbdDnqfZfVfApfSQrdrgA78QGNrhEbxxn4LaUcJi37C",
   "worker_name": "Macbook M3",
   "ip": "192.168.40.8",
-  "updated_at": 1790820600,
-  "updated_at_str": "2026-09-30 22:10:00",
+  "updated_at": 1790820670,
+  "updated_at_str": "2026-09-30 22:11:10",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 0 | Epoch 55)",
   "proc_running": true,
@@ -16,7 +16,7 @@
   "upload_speed": "6.7 Mbps",
   "download_speed": "40.2 Mbps",
   "speedtest_time": "",
-  "peers_count": 27,
+  "peers_count": 26,
   "restart_count": 0,
   "recent_tokens": "126.99万",
   "cycle_tokens": "49.48万",
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "2026-09-30 22:09:58.174 | DEBUG    | miner.training.activation_queue:_fetch_activations_layer0:295 - No forward activations needed and no backwards activations needed"
+  "last_log": "2026-09-30 22:11:09.989 | DEBUG    | miner.training.activation_queue:_fetch_activations_layer0:295 - No forward activations needed and no backwards activations needed"
 }

@@ -2,10 +2,10 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790817426,
-  "updated_at_str": "2026-09-30 21:17:06",
+  "updated_at": 1790817488,
+  "updated_at_str": "2026-09-30 21:18:08",
   "status": "training",
-  "phase": "🟢 活跃通信中 (Layer 2)",
+  "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
   "layer": "Layer 2",
   "run_id": "4.12.16.20-tah",
@@ -16,9 +16,34 @@
   "speedtest_time": "",
   "peers_count": 5,
   "restart_count": 0,
-  "recent_tokens": "--",
-  "cycle_tokens": "--",
-  "hourly_tokens": [],
+  "recent_tokens": "99.24万",
+  "cycle_tokens": "9.47万",
+  "hourly_tokens": [
+    {
+      "range": "21:00~21:17",
+      "tokens": "1.52万",
+      "tokens_num": 1.52,
+      "is_current": true
+    },
+    {
+      "range": "20:00~21:00",
+      "tokens": "7.95万",
+      "tokens_num": 7.95,
+      "is_current": false
+    },
+    {
+      "range": "19:00~20:00",
+      "tokens": "13.94万",
+      "tokens_num": 13.94,
+      "is_current": false
+    },
+    {
+      "range": "18:00~19:00",
+      "tokens": "9.69万",
+      "tokens_num": 9.69,
+      "is_current": false
+    }
+  ],
   "last_payout": {
     "amount": 4.238,
     "amount_str": "4.238 Alpha",
@@ -32,5 +57,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:17:05.203] [info]  2026-09-30 21:17:05.203 | INFO     | miner.training.activation_publisher:_process_outbound_item:556 - Activation push OUTBOUND | P2P send | id=e582b7a2-76b4-4d38-826e-bd1870ff5bad dir=backward attempt=1/5 candidate_peers=1 tensor_bytes=206377"
+  "last_log": "[2026-09-30 21:18:07.179] [info]  2026-09-30 21:18:07.179 | ERROR    | subnet.common_api_client:orchestrator_request:97 - Error making orchestrator request to endpoint /miner/all_layers_training: 500 - Internal Server Error"
 }

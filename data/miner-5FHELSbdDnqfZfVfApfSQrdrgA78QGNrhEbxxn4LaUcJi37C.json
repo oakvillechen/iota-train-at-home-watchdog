@@ -4,8 +4,8 @@
   "worker_id": "miner-5FHELSbdDnqfZfVfApfSQrdrgA78QGNrhEbxxn4LaUcJi37C",
   "worker_name": "Macbook M3",
   "ip": "192.168.40.8",
-  "updated_at": 1790819790,
-  "updated_at_str": "2026-09-30 21:56:30",
+  "updated_at": 1790819851,
+  "updated_at_str": "2026-09-30 21:57:31",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 0 | Epoch 55)",
   "proc_running": true,
@@ -18,9 +18,34 @@
   "speedtest_time": "",
   "peers_count": 26,
   "restart_count": 0,
-  "recent_tokens": "--",
-  "cycle_tokens": "--",
-  "hourly_tokens": [],
+  "recent_tokens": "130.00万",
+  "cycle_tokens": "43.20万",
+  "hourly_tokens": [
+    {
+      "range": "21:00~21:56",
+      "tokens": "22.59万",
+      "tokens_num": 22.59,
+      "is_current": true
+    },
+    {
+      "range": "20:00~21:00",
+      "tokens": "20.61万",
+      "tokens_num": 20.61,
+      "is_current": false
+    },
+    {
+      "range": "19:00~20:00",
+      "tokens": "22.40万",
+      "tokens_num": 22.4,
+      "is_current": false
+    },
+    {
+      "range": "18:00~19:00",
+      "tokens": "19.69万",
+      "tokens_num": 19.69,
+      "is_current": false
+    }
+  ],
   "last_payout": {
     "amount": 2.508,
     "amount_str": "2.508 Alpha",
@@ -34,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:56:27.682] [info]  2026-09-30 21:56:27.682 | DEBUG    | subnet.common_api_client:orchestrator_request:34 - Making orchestrator request | method: POST | path: /miner/submit_activation"
+  "last_log": "[2026-09-30 21:57:30.528] [info]  2026-09-30 21:57:30.528 | DEBUG    | subnet.common_api_client:orchestrator_request:34 - Making orchestrator request | method: POST | path: /miner/submit_activation"
 }

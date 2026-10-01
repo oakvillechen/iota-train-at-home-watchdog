@@ -2572,13 +2572,15 @@ class IotaWatchdogApp:
 
             def _open_dashboard():
                 local_dash = os.path.join(LOG_DIR, "dashboard", "index.html")
+                token = self.config.get("github_token", "").strip()
+                token_hash = f"#token={token}" if token else ""
                 if os.path.exists(local_dash):
-                    webbrowser.open(f"file://{local_dash}")
+                    webbrowser.open(f"file://{local_dash}{token_hash}")
                 else:
                     repo = ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog"
                     user = repo.split("/")[0] if "/" in repo else "oakvillechen"
                     repo_name = repo.split("/")[1] if "/" in repo else "iota-train-at-home-watchdog"
-                    webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/")
+                    webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/{token_hash}")
 
             btn_open = ModernButton(btn_bar, text="🌐 打开监控看板", command=_open_dashboard, bg_color="#6366f1", fg_color="#ffffff", hover_bg="#4f46e5", font=("Helvetica", 10, "bold"), padx=10, pady=5)
             btn_open.pack(side=tk.LEFT)

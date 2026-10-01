@@ -585,6 +585,17 @@
         if (saved) {
           appConfig = { ...appConfig, ...JSON.parse(saved) };
         }
+        // 自动提取 URL Hash / Query 传入的 Token (如从 Watchdog 唤起的本地私有看板)
+        const hashMatch = window.location.hash.match(/token=([^&]+)/);
+        const searchMatch = window.location.search.match(/[?&]token=([^&]+)/);
+        const urlToken = hashMatch ? hashMatch[1] : (searchMatch ? searchMatch[1] : null);
+        if (urlToken) {
+          appConfig.token = decodeURIComponent(urlToken);
+          localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }
       } catch (e) {}
 
       document.getElementById("cfg-repo").value = appConfig.repo;

@@ -695,14 +695,12 @@
                     "Accept": "application/vnd.github.raw+json",
                     "Authorization": `Bearer ${appConfig.token}`
                   };
-                  const bRes = await fetch(f.git_url, { headers: blobHeaders, cache: 'no-store' });
+                  const bRes = await fetch(f.git_url, { headers: blobHeaders });
                   if (bRes.ok) return await bRes.json();
                 }
-                const rawUrl = `${f.download_url}?_t=${Date.now()}`;
-                const rRes = await fetch(rawUrl, { 
-                  cache: 'no-store',
-                  headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-                });
+                const sep = f.download_url && f.download_url.includes('?') ? '&' : '?';
+                const rawUrl = `${f.download_url}${sep}_t=${Date.now()}`;
+                const rRes = await fetch(rawUrl);
                 if (rRes.ok) return await rRes.json();
               } catch (e) {
                 return null;
@@ -712,22 +710,16 @@
             nodes = results.filter(Boolean);
           }
         } else {
-          // GitHub API 403 备用通道：读取 cluster_manifest.json (绕过 Fastly 缓存)
+          // GitHub API 403 / 404 备用通道：读取 cluster_manifest.json
           try {
             const manifestUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/cluster_manifest.json?_t=${Date.now()}`;
-            const mRes = await fetch(manifestUrl, { 
-              cache: 'no-store',
-              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-            });
+            const mRes = await fetch(manifestUrl);
             if (mRes.ok) {
               const mData = await mRes.json();
               const nodeIds = mData.nodes || [];
               const rawPromises = nodeIds.map(async nid => {
                 const nUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/${nid}.json?_t=${Date.now()}`;
-                const nr = await fetch(nUrl, { 
-                  cache: 'no-store',
-                  headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-                });
+                const nr = await fetch(nUrl);
                 return nr.ok ? await nr.json() : null;
               });
               const rawResults = await Promise.all(rawPromises);

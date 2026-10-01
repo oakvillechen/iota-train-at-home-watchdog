@@ -4,8 +4,8 @@
   "worker_id": "miner-5Gq9WWo2LDqLHCaFGbYPvEiA9Gu7NV4FWCucBjwkYNRw3rj6",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790821447,
-  "updated_at_str": "2026-09-30 22:24:07",
+  "updated_at": 1790821508,
+  "updated_at_str": "2026-09-30 22:25:08",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 75)",
   "proc_running": true,
@@ -22,7 +22,7 @@
   "cycle_tokens": "16.35万",
   "hourly_tokens": [
     {
-      "range": "22:00~22:19",
+      "range": "22:00~22:24",
       "tokens": "2.47万",
       "tokens_num": 2.47,
       "is_current": true
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 22:24:04.647] [info]  2026-09-30 22:24:04.647 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 22:25:07.148] [info]  2026-09-30 22:25:07.147 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
 }

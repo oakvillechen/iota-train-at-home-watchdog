@@ -13,6 +13,12 @@ import socket
 import time
 import urllib.request
 import urllib.error
+import ssl
+
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except Exception:
+    pass
 
 logger = logging.getLogger("iota_cluster_sync")
 

@@ -20,7 +20,14 @@ import re
 import json
 import threading
 import webbrowser
+import ssl
 from datetime import datetime, timedelta
+
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except Exception:
+    pass
+
 try:
     import iota_cluster_sync
 except Exception as e:
@@ -42,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.2"
+APP_VERSION = "1.6.3"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"

@@ -12,8 +12,14 @@ import hashlib
 import zipfile
 import urllib.request
 import urllib.error
+import ssl
 import subprocess
 from typing import Optional, Tuple, Callable, Dict, Any
+
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except Exception:
+    pass
 
 REPO_DEFAULT = "oakvillechen/iota-train-at-home-watchdog"
 BASE_INSTALL_DIR = os.path.expanduser("~/Applications/IOTA-Watchdog")

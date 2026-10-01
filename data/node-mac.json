@@ -1,0 +1,61 @@
+{
+  "worker_id": "node-mac",
+  "worker_name": "Mac",
+  "ip": "192.168.40.8",
+  "updated_at": 1790814644,
+  "updated_at_str": "2026-09-30 20:30:44",
+  "status": "training",
+  "phase": "🚀 正式训练中 (Layer 0 | Epoch 54)",
+  "proc_running": true,
+  "layer": "Layer 0",
+  "run_id": "4.12.16.24-tah",
+  "epoch": "Epoch 54",
+  "queue_pos": 0,
+  "upload_speed": "6.7 Mbps",
+  "download_speed": "40.2 Mbps",
+  "speedtest_time": "",
+  "peers_count": 22,
+  "restart_count": 0,
+  "recent_tokens": "111.71万",
+  "cycle_tokens": "9.10万",
+  "hourly_tokens": [
+    {
+      "range": "20:00~20:30",
+      "tokens": "9.10万",
+      "tokens_num": 9.1,
+      "is_current": true
+    },
+    {
+      "range": "19:00~20:00",
+      "tokens": "20.44万",
+      "tokens_num": 20.44,
+      "is_current": false
+    },
+    {
+      "range": "18:00~19:00",
+      "tokens": "20.61万",
+      "tokens_num": 20.61,
+      "is_current": false
+    },
+    {
+      "range": "17:00~18:00",
+      "tokens": "22.25万",
+      "tokens_num": 22.25,
+      "is_current": false
+    }
+  ],
+  "last_payout": {
+    "amount": 2.508,
+    "amount_str": "2.508 Alpha",
+    "timestamp": 1790813029,
+    "time_str": "09-30 20:03 EDT",
+    "status": "已结算",
+    "display": "2.508 Alpha (已结算) · 09-30 20:03 EDT"
+  },
+  "next_payout": {
+    "timestamp": 1790899200,
+    "time_str": "10-01 20:00 EDT",
+    "display": "10-01 20:00 EDT"
+  },
+  "last_log": "[2026-09-30 20:30:42.974] [info]  2026-09-30 20:30:42.974 | INFO     | miner.utils.utils:wait_for_state:324 - Waiting for state training"
+}

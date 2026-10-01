@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790816724,
-  "updated_at_str": "2026-09-30 21:05:24",
+  "updated_at": 1790816785,
+  "updated_at_str": "2026-09-30 21:06:25",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
@@ -57,5 +57,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:05:19.193] [info]  2026-09-30 21:05:19.193 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
+  "last_log": "[2026-09-30 21:06:19.814] [info]  2026-09-30 21:06:19.813 | DEBUG    | miner.p2p.stack:_enqueue_after_ack:325 - P2P /activation/push c119eab9-82bc-40d2-93af-75969bf6b5f5 enqueued (peer=ad593ec45e31e291...)"
 }

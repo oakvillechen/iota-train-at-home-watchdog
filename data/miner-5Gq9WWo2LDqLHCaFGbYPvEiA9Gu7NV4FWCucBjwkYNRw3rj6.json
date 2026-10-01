@@ -4,10 +4,10 @@
   "worker_id": "miner-5Gq9WWo2LDqLHCaFGbYPvEiA9Gu7NV4FWCucBjwkYNRw3rj6",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790819589,
-  "updated_at_str": "2026-09-30 21:53:09",
+  "updated_at": 1790819631,
+  "updated_at_str": "2026-09-30 21:53:51",
   "status": "training",
-  "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
+  "phase": "🟢 活跃通信中 (Layer 2)",
   "proc_running": true,
   "layer": "Layer 2",
   "run_id": "4.12.16.20-tah",
@@ -18,34 +18,9 @@
   "speedtest_time": "",
   "peers_count": 5,
   "restart_count": 0,
-  "recent_tokens": "105.86万",
-  "cycle_tokens": "15.21万",
-  "hourly_tokens": [
-    {
-      "range": "21:00~21:51",
-      "tokens": "7.13万",
-      "tokens_num": 7.13,
-      "is_current": true
-    },
-    {
-      "range": "20:00~21:00",
-      "tokens": "8.08万",
-      "tokens_num": 8.08,
-      "is_current": false
-    },
-    {
-      "range": "19:00~20:00",
-      "tokens": "12.59万",
-      "tokens_num": 12.59,
-      "is_current": false
-    },
-    {
-      "range": "18:00~19:00",
-      "tokens": "13.77万",
-      "tokens_num": 13.77,
-      "is_current": false
-    }
-  ],
+  "recent_tokens": "--",
+  "cycle_tokens": "--",
+  "hourly_tokens": [],
   "last_payout": {
     "amount": 4.238,
     "amount_str": "4.238 Alpha",
@@ -59,5 +34,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:53:08.891] [info]  2026-09-30 21:53:08.890 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 21:53:49.954] [info]  2026-09-30 21:53:49.954 | DEBUG    | subnet.model.utils:log_gpu_memory_usage:404 - GPU memory usage: 4.29GB / 9.40GB -- starting training backward pass"
 }

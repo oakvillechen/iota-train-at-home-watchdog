@@ -76,25 +76,6 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
         "User-Agent": f"IOTA-Watchdog-Sync/{worker_id}"
     }
 
-    # 1. 尝试获取已有文件的 sha (更新已有文件时必须携带 sha)
-    sha = None
-    try:
-        req = urllib.request.Request(f"{api_url}?ref={branch}", headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            sha = data.get("sha")
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            sha = None  # 文件尚不存在，直接新建
-        elif e.code == 401:
-            return False, "GitHub Token 无效或已过期 (401 Unauthorized)"
-        elif e.code == 403:
-            return False, "Token 缺少该仓库的 Contents: Write 权限或触发 Rate Limit (403)"
-        else:
-            return False, f"GitHub API 响应错误 (HTTP {e.code})"
-    except Exception as e:
-        return False, f"探测现有文件失败: {e}"
-
     # 2. 构建赛博上报 Payload
     now_ts = int(time.time())
     now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_ts))
@@ -130,34 +111,69 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
     json_str = json.dumps(payload, indent=2, ensure_ascii=False)
     content_b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
 
-    # 3. 提交 PUT contents 请求
-    body = {
-        "message": f"telemetry: update status for {worker_id} [{now_str}]",
-        "content": content_b64,
-        "branch": branch
-    }
-    if sha:
-        body["sha"] = sha
+    # 3. 带冲突自动重试机制的提交 (处理并发 commit 409 Conflict)
+    max_retries = 3
+    last_err = ""
 
-    try:
-        body_bytes = json.dumps(body).encode("utf-8")
-        put_headers = dict(headers)
-        put_headers["Content-Type"] = "application/json"
-        put_req = urllib.request.Request(api_url, data=body_bytes, headers=put_headers, method="PUT")
-        with urllib.request.urlopen(put_req, timeout=12) as put_resp:
-            if put_resp.status in (200, 201):
-                return True, f"上报成功 ({now_str})"
-            else:
-                return False, f"HTTP {put_resp.status}"
-    except urllib.error.HTTPError as e:
+    for attempt in range(max_retries):
+        sha = None
         try:
-            err_data = json.loads(e.read().decode("utf-8"))
-            err_msg = err_data.get("message", str(e))
-        except Exception:
-            err_msg = str(e)
-        return False, f"HTTP {e.code}: {err_msg}"
-    except Exception as e:
-        return False, f"网络请求失败: {e}"
+            req = urllib.request.Request(f"{api_url}?ref={branch}&_t={int(time.time()*1000)}", headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                sha = data.get("sha")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                sha = None
+            elif e.code == 401:
+                return False, "GitHub Token 无效或已过期 (401 Unauthorized)"
+            elif e.code == 403:
+                return False, "Token 缺少该仓库的 Contents: Write 权限或触发 Rate Limit (403)"
+            else:
+                last_err = f"探测文件失败 (HTTP {e.code})"
+                time.sleep(1.5)
+                continue
+        except Exception as e:
+            last_err = f"探测网络失败: {e}"
+            time.sleep(1.5)
+            continue
+
+        body = {
+            "message": f"telemetry: update status for {worker_id} [{now_str}]",
+            "content": content_b64,
+            "branch": branch
+        }
+        if sha:
+            body["sha"] = sha
+
+        try:
+            body_bytes = json.dumps(body).encode("utf-8")
+            put_headers = dict(headers)
+            put_headers["Content-Type"] = "application/json"
+            put_req = urllib.request.Request(api_url, data=body_bytes, headers=put_headers, method="PUT")
+            with urllib.request.urlopen(put_req, timeout=12) as put_resp:
+                if put_resp.status in (200, 201):
+                    return True, f"上报成功 ({now_str})"
+                else:
+                    last_err = f"HTTP {put_resp.status}"
+        except urllib.error.HTTPError as e:
+            if e.code == 409 and attempt < max_retries - 1:
+                # 409 Conflict: 分支 HEAD 被其他机子更新，等待 1.5 秒重新获取最新 sha 后重试
+                time.sleep(1.5)
+                continue
+            try:
+                err_data = json.loads(e.read().decode("utf-8"))
+                err_msg = err_data.get("message", str(e))
+            except Exception:
+                err_msg = str(e)
+            return False, f"HTTP {e.code}: {err_msg}"
+        except Exception as e:
+            last_err = f"网络请求失败: {e}"
+            if attempt < max_retries - 1:
+                time.sleep(1.5)
+                continue
+
+    return False, last_err or "上报重试耗尽"
 
 
 def delete_worker_file(config: dict, worker_id: str) -> tuple:

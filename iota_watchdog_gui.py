@@ -2364,7 +2364,8 @@ class IotaWatchdogApp:
             tk.Label(container, text="🌐 GitHub 集群实时监控上报", font=("Helvetica", 14, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(0, 4))
             tk.Label(container, text="每台机器运行本程序并开启上报，即可在同一个 GitHub 网页中一览所有 Miner", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(anchor="w", pady=(0, 14))
 
-            sync_var = tk.BooleanVar(value=self.config.get("cloud_sync_enabled", False))
+            has_saved_token = bool(self.config.get("github_token", "").strip())
+            sync_var = tk.BooleanVar(value=self.config.get("cloud_sync_enabled", has_saved_token))
             chk_enable = tk.Checkbutton(container, text="开启本机自动上报至 GitHub 仓库", variable=sync_var, font=("Helvetica", 11, "bold"), bg=bg_main, fg="#10b981", activebackground=bg_main, selectcolor=entry_bg)
             chk_enable.pack(anchor="w", pady=(0, 10))
 
@@ -2506,11 +2507,19 @@ class IotaWatchdogApp:
                                     iota_cluster_sync.delete_worker_file(temp_cfg, old_id)
                                 except Exception:
                                     pass
+                            self.config["cloud_sync_enabled"] = True
+                            self.config["github_token"] = temp_cfg["github_token"]
+                            self.config["github_repo"] = temp_cfg["github_repo"]
+                            self.config["worker_name"] = temp_cfg["worker_name"]
+                            self.config["worker_id"] = temp_cfg["worker_id"]
+                            self.config["miner_id"] = temp_cfg.get("miner_id", "")
+                            save_config(self.config)
                             self.last_cloud_sync_time = time.time()
                             self.last_cloud_sync_msg = res_msg
-                            self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 data/{temp_cfg['worker_id']}.json)")
+                            self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 data/{temp_cfg['worker_id']}.json 并自动激活后台同步)")
                             dlg.after(0, lambda: [
-                                lbl_msg.config(text=f"✅ 测试成功: {res_msg}\n数据已推送到 {temp_cfg['github_repo']}/data/{temp_cfg['worker_id']}.json", fg="#10b981"),
+                                sync_var.set(True),
+                                lbl_msg.config(text=f"✅ 测试成功并已自动开启持续同步！\n数据已推送到 {temp_cfg['github_repo']}/data/{temp_cfg['worker_id']}.json", fg="#10b981"),
                                 btn_test.config(text="🚀 测试上报一次")
                             ])
                         else:

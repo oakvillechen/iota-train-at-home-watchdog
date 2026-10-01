@@ -666,7 +666,7 @@
 
       try {
         const apiUrl = `https://api.github.com/repos/${appConfig.repo}/contents/data?ref=${appConfig.branch}&_t=${Date.now()}`;
-        const resp = await fetch(apiUrl, { headers });
+        const resp = await fetch(apiUrl, { headers, cache: 'no-store' });
 
         if (resp.ok) {
           const files = await resp.json();
@@ -679,16 +679,19 @@
 
             const fetchPromises = validFiles.map(async f => {
               try {
-                if (f.git_url) {
-                  const blobHeaders = { "Accept": "application/vnd.github.raw+json" };
-                  if (appConfig.token) {
-                    blobHeaders["Authorization"] = `Bearer ${appConfig.token}`;
-                  }
-                  const bRes = await fetch(f.git_url, { headers: blobHeaders });
+                if (appConfig.token && f.git_url) {
+                  const blobHeaders = { 
+                    "Accept": "application/vnd.github.raw+json",
+                    "Authorization": `Bearer ${appConfig.token}`
+                  };
+                  const bRes = await fetch(f.git_url, { headers: blobHeaders, cache: 'no-store' });
                   if (bRes.ok) return await bRes.json();
                 }
                 const rawUrl = `${f.download_url}?_t=${Date.now()}`;
-                const rRes = await fetch(rawUrl);
+                const rRes = await fetch(rawUrl, { 
+                  cache: 'no-store',
+                  headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
                 if (rRes.ok) return await rRes.json();
               } catch (e) {
                 return null;
@@ -698,16 +701,22 @@
             nodes = results.filter(Boolean);
           }
         } else {
-          // GitHub API 403 备用通道：读取 cluster_manifest.json
+          // GitHub API 403 备用通道：读取 cluster_manifest.json (绕过 Fastly 缓存)
           try {
             const manifestUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/cluster_manifest.json?_t=${Date.now()}`;
-            const mRes = await fetch(manifestUrl);
+            const mRes = await fetch(manifestUrl, { 
+              cache: 'no-store',
+              headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+            });
             if (mRes.ok) {
               const mData = await mRes.json();
               const nodeIds = mData.nodes || [];
               const rawPromises = nodeIds.map(async nid => {
                 const nUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/${nid}.json?_t=${Date.now()}`;
-                const nr = await fetch(nUrl);
+                const nr = await fetch(nUrl, { 
+                  cache: 'no-store',
+                  headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+                });
                 return nr.ok ? await nr.json() : null;
               });
               const rawResults = await Promise.all(rawPromises);
@@ -790,9 +799,13 @@
 
       const processedMiners = minersData.map(m => {
         const lastSeenAgo = now - (m.updated_at || 0);
-        // 超时判定：大于 8 分钟或进程终止为离线；3~8分钟为延迟
-        const isOffline = !m.proc_running || lastSeenAgo > 480;
-        const isStale = !isOffline && lastSeenAgo > 180;
+        // 稳健超时判定：
+        // 1. 进程已死 -> 确定为离线
+        // 2. 进程正常运行且在 25 分钟内有过心跳 -> 确认为在线（若 > 5分钟则标记为同步延迟，仍计入在线）
+        // 3. 超过 25 分钟无任何遥测包 -> 标记为失联
+        const isProcessDead = m.proc_running === false;
+        const isOffline = isProcessDead || lastSeenAgo > 1500;
+        const isStale = !isOffline && lastSeenAgo > 300;
         
         let statusCategory = 'active';
         if (isOffline) {
@@ -907,7 +920,7 @@
 
       if (isOff) {
         borderClass = "border-[var(--red)]/40";
-        const offReason = !m.proc_running ? "PROCESS STOPPED" : "OFFLINE";
+        const offReason = !m.proc_running ? "PROCESS STOPPED" : `OFFLINE (${Math.floor((m.lastSeenAgo || 0) / 60)}m)`;
         statusBadge = `
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--red-soft)] text-[var(--red)] text-[12px] font-semibold tracking-wide">
             <span class="w-2 h-2 rounded-full bg-[var(--red)]"></span>
@@ -916,10 +929,11 @@
         `;
       } else if (isStale) {
         borderClass = "border-[var(--amber)]/40";
+        const delayM = Math.max(1, Math.floor((m.lastSeenAgo || 0) / 60));
         statusBadge = `
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] text-[12px] font-semibold tracking-wide">
             <span class="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse"></span>
-            SYNC DELAY / 信号延迟
+            活跃采矿中 (${delayM}分 延迟)
           </span>
         `;
       } else if (isQueue) {

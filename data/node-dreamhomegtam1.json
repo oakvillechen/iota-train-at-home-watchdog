@@ -2,60 +2,35 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790804128,
-  "updated_at_str": "2026-09-30 17:35:28",
+  "updated_at": 1790814497,
+  "updated_at_str": "2026-09-30 20:28:17",
   "status": "training",
-  "phase": "🚀 正式训练中 (Layer 2 | Epoch 72)",
+  "phase": "🟢 活跃通信中 (检测中...)",
   "proc_running": true,
   "layer": "Layer 2",
   "run_id": "4.12.16.20-tah",
-  "epoch": "Epoch 72",
+  "epoch": "Epoch 74",
   "queue_pos": 0,
   "upload_speed": "检测中...",
   "download_speed": "检测中...",
   "speedtest_time": "",
   "peers_count": 6,
   "restart_count": 0,
-  "recent_tokens": "157.93万",
-  "cycle_tokens": "589.18万",
-  "hourly_tokens": [
-    {
-      "range": "17:00~17:32",
-      "tokens": "10.15万",
-      "tokens_num": 10.15,
-      "is_current": true
-    },
-    {
-      "range": "16:00~17:00",
-      "tokens": "23.25万",
-      "tokens_num": 23.25,
-      "is_current": false
-    },
-    {
-      "range": "15:00~16:00",
-      "tokens": "25.17万",
-      "tokens_num": 25.17,
-      "is_current": false
-    },
-    {
-      "range": "14:00~15:00",
-      "tokens": "29.93万",
-      "tokens_num": 29.93,
-      "is_current": false
-    }
-  ],
+  "recent_tokens": "--",
+  "cycle_tokens": "--",
+  "hourly_tokens": [],
   "last_payout": {
-    "amount": 2.458,
-    "amount_str": "2.458 Alpha",
-    "timestamp": 1790726642,
-    "time_str": "09-29 20:04 EDT",
+    "amount": 4.238,
+    "amount_str": "4.238 Alpha",
+    "timestamp": 1790813029,
+    "time_str": "09-30 20:03 EDT",
     "status": "已结算",
-    "display": "2.458 Alpha (已结算) · 09-29 20:04 EDT"
+    "display": "4.238 Alpha (已结算) · 09-30 20:03 EDT"
   },
   "next_payout": {
-    "timestamp": 1790812800,
-    "time_str": "09-30 20:00 EDT",
-    "display": "09-30 20:00 EDT"
+    "timestamp": 1790899200,
+    "time_str": "10-01 20:00 EDT",
+    "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 17:35:24.307] [info]  2026-09-30 17:35:24.307 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 20:28:14.636] [info]  2026-09-30 20:28:14.635 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/heartbeat?expected_phase=training; response: {'run_id': '4.12.16.20-tah', 'layer': 2, 'epoch': 74, 'phase': 'training', 'status': 'idle'}"
 }

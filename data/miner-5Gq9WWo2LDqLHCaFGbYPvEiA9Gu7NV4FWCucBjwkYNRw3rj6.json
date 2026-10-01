@@ -4,8 +4,8 @@
   "worker_id": "miner-5Gq9WWo2LDqLHCaFGbYPvEiA9Gu7NV4FWCucBjwkYNRw3rj6",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790821141,
-  "updated_at_str": "2026-09-30 22:19:01",
+  "updated_at": 1790821202,
+  "updated_at_str": "2026-09-30 22:20:02",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 75)",
   "proc_running": true,
@@ -18,31 +18,31 @@
   "speedtest_time": "",
   "peers_count": 5,
   "restart_count": 0,
-  "recent_tokens": "82.41万",
-  "cycle_tokens": "15.88万",
+  "recent_tokens": "82.32万",
+  "cycle_tokens": "16.35万",
   "hourly_tokens": [
     {
-      "range": "22:00~22:14",
-      "tokens": "1.76万",
-      "tokens_num": 1.76,
+      "range": "22:00~22:19",
+      "tokens": "2.47万",
+      "tokens_num": 2.47,
       "is_current": true
     },
     {
       "range": "21:00~22:00",
-      "tokens": "7.77万",
-      "tokens_num": 7.77,
+      "tokens": "7.23万",
+      "tokens_num": 7.23,
       "is_current": false
     },
     {
       "range": "20:00~21:00",
-      "tokens": "6.35万",
-      "tokens_num": 6.35,
+      "tokens": "6.65万",
+      "tokens_num": 6.65,
       "is_current": false
     },
     {
       "range": "19:00~20:00",
-      "tokens": "14.99万",
-      "tokens_num": 14.99,
+      "tokens": "16.01万",
+      "tokens_num": 16.01,
       "is_current": false
     }
   ],
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 22:19:00.797] [info]  2026-09-30 22:19:00.796 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
+  "last_log": "[2026-09-30 22:20:01.293] [info]  2026-09-30 22:20:01.293 | INFO     | miner.training.activation_publisher:_process_outbound_item:556 - Activation push OUTBOUND | P2P send | id=0cdb834b-10a0-45b1-8ca2-2cd83c1c1c84 dir=backward attempt=2/5 candidate_peers=1 tensor_bytes=206377"
 }

@@ -2349,7 +2349,7 @@ class IotaWatchdogApp:
             import socket
             dlg = tk.Toplevel(self.root)
             dlg.title("🌐 多机云端监控配置 (Cyber Dashboard)")
-            dlg.geometry("540x480")
+            dlg.geometry("540x550")
             dlg.resizable(False, False)
 
             bg_main = "#0f172a" if self.dark_mode else "#f8fafc"
@@ -2440,12 +2440,27 @@ class IotaWatchdogApp:
             _enable_clipboard(ent_repo)
 
             row_int = tk.Frame(fields, bg=bg_main)
-            row_int.pack(fill=tk.X, pady=(2, 8))
+            row_int.pack(fill=tk.X, pady=(2, 6))
             tk.Label(row_int, text="上报频率 (秒):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
             ent_interval = tk.Entry(row_int, width=6, font=("Helvetica", 11, "bold"), bg=entry_bg, fg=entry_fg, justify="center", bd=1, relief="solid")
             ent_interval.insert(0, str(self.config.get("cloud_sync_interval_seconds", 60)))
             ent_interval.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
             tk.Label(row_int, text="(推荐 30~60 秒，避免频繁触发 Rate Limit)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
+
+            row_enc = tk.Frame(fields, bg=bg_main)
+            row_enc.pack(fill=tk.X, pady=(2, 4))
+            enc_var = tk.BooleanVar(value=self.config.get("cloud_encrypt_enabled", True))
+            chk_enc = tk.Checkbutton(row_enc, text="🔐 开启端到端 AES-256 加密 (隐藏 Miner ID & 资产)", variable=enc_var, font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main, selectcolor=entry_bg, activebackground=bg_main, activeforeground=fg_main)
+            chk_enc.pack(anchor="w")
+
+            row_pwd = tk.Frame(fields, bg=bg_main)
+            row_pwd.pack(fill=tk.X, pady=(2, 8))
+            tk.Label(row_pwd, text="解密密码:", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
+            ent_pwd = tk.Entry(row_pwd, width=16, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, bd=1, relief="solid")
+            ent_pwd.insert(0, self.config.get("cloud_encrypt_password", "iota2026"))
+            ent_pwd.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
+            tk.Label(row_pwd, text="(用于网页端解锁真实卡片，默认 iota2026)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
+            _enable_clipboard(ent_pwd)
 
             lbl_msg = tk.Label(container, text=f"状态: {getattr(self, 'last_cloud_sync_msg', '待就绪')}", font=("Helvetica", 11, "bold"), bg=bg_main, fg="#0ea5e9", wraplength=480, justify="left")
             lbl_msg.pack(anchor="w", pady=(4, 10))
@@ -2482,7 +2497,9 @@ class IotaWatchdogApp:
                     "github_branch": self.config.get("github_branch", "main"),
                     "worker_name": w_name,
                     "worker_id": self.get_worker_identity(),
-                    "miner_id": self.get_miner_id()
+                    "miner_id": self.get_miner_id(),
+                    "cloud_encrypt_enabled": enc_var.get(),
+                    "cloud_encrypt_password": ent_pwd.get().strip() or "iota2026"
                 }
                 payload = self.get_current_telemetry_payload()
 
@@ -2513,6 +2530,8 @@ class IotaWatchdogApp:
                             self.config["worker_name"] = temp_cfg["worker_name"]
                             self.config["worker_id"] = temp_cfg["worker_id"]
                             self.config["miner_id"] = temp_cfg.get("miner_id", "")
+                            self.config["cloud_encrypt_enabled"] = temp_cfg["cloud_encrypt_enabled"]
+                            self.config["cloud_encrypt_password"] = temp_cfg["cloud_encrypt_password"]
                             save_config(self.config)
                             self.last_cloud_sync_time = time.time()
                             self.last_cloud_sync_msg = res_msg
@@ -2545,6 +2564,8 @@ class IotaWatchdogApp:
                 new_w_id = self.get_worker_identity()
                 self.config["worker_id"] = new_w_id
                 self.config["miner_id"] = self.get_miner_id()
+                self.config["cloud_encrypt_enabled"] = enc_var.get()
+                self.config["cloud_encrypt_password"] = ent_pwd.get().strip() or "iota2026"
 
                 t_input = ent_token.get().strip()
                 if t_input:

@@ -333,6 +333,24 @@
       </div>
     </div>
 
+    <!-- AES 解密解锁提示条 (若遇到未解密节点时展示) -->
+    <div id="encryption-unlock-banner" class="hidden mb-6 p-4 rounded-2xl bg-[var(--card)] border border-[var(--indigo)]/40 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-[var(--indigo-soft)] flex items-center justify-center text-lg text-[var(--indigo)] shrink-0">🔐</div>
+        <div>
+          <div class="font-bold text-[14px] text-[var(--ink)] flex items-center gap-2">
+            <span>集群遥测数据已启用端到端 AES-256 加密</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--green)]/15 text-[var(--green)] font-mono">ZERO-KNOWLEDGE</span>
+          </div>
+          <div class="text-[12px] text-[var(--ink-2)] mt-0.5">公网仓库仅存密文，Miner ID、IP 及收益完全保密。请输入密码解锁查看：</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
+        <input type="password" id="quick-decrypt-pwd" placeholder="解密密码 (默认: iota2026)" class="w-full sm:w-48 bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3 py-2 text-[13px] text-[var(--ink)] font-mono focus:outline-none focus:border-[var(--indigo)]">
+        <button onclick="unlockWithQuickPassword()" class="px-4 py-2 rounded-xl bg-[var(--indigo)] hover:bg-[var(--indigo)]/90 text-white text-[13px] font-semibold shrink-0 transition">解锁查看</button>
+      </div>
+    </div>
+
     <!-- 节点网格 Matrix (采用宽敞的两列/单列排版，给条形图充足展示空间) -->
     <div id="miners-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- 动态插入 Miner 卡片 -->
@@ -405,6 +423,12 @@
         </div>
 
         <div>
+          <label class="block text-[var(--ink)] font-semibold mb-1">🔐 端到端 AES 解密密码 (默认: iota2026)</label>
+          <input type="password" id="cfg-password" placeholder="默认: iota2026" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
+          <p class="text-[12px] text-[var(--ink-3)] mt-1">若 Watchdog 启用了 AES-256 加密上传，需填入密码解密查看真实 Miner ID 与收益。</p>
+        </div>
+
+        <div>
           <label class="block text-[var(--ink)] font-semibold mb-1">自动刷新间隔 (秒)</label>
           <select id="cfg-interval" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
             <option value="15">15 秒 (极速遥测)</option>
@@ -430,7 +454,8 @@
       repo: "oakvillechen/iota-train-at-home-watchdog",
       branch: "main",
       token: "",
-      interval: 30
+      interval: 30,
+      password: "iota2026"
     };
 
     let minersData = [];
@@ -598,10 +623,18 @@
         }
       } catch (e) {}
 
+      if (!appConfig.password) {
+        appConfig.password = "iota2026";
+      }
+
       document.getElementById("cfg-repo").value = appConfig.repo;
       document.getElementById("cfg-branch").value = appConfig.branch;
       document.getElementById("cfg-token").value = appConfig.token || "";
       document.getElementById("cfg-interval").value = appConfig.interval || 30;
+      const pwdInput = document.getElementById("cfg-password");
+      if (pwdInput) pwdInput.value = appConfig.password || "";
+      const qInput = document.getElementById("quick-decrypt-pwd");
+      if (qInput) qInput.value = appConfig.password || "";
       countdownSec = appConfig.interval || 30;
     }
 
@@ -610,6 +643,8 @@
       appConfig.branch = document.getElementById("cfg-branch").value.trim() || "main";
       appConfig.token = document.getElementById("cfg-token").value.trim();
       appConfig.interval = parseInt(document.getElementById("cfg-interval").value, 10) || 30;
+      const pwdEl = document.getElementById("cfg-password");
+      if (pwdEl) appConfig.password = pwdEl.value.trim() || "iota2026";
 
       localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
       document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
@@ -654,6 +689,68 @@
       setTimeout(() => icon.classList.remove("rotate-180"), 500);
 
       countdownSec = appConfig.interval || 30;
+      fetchClusterData();
+    }
+
+    // ================= 端到端 AES-256 解密 =================
+    async function decryptNodeData(packet, password) {
+      if (!packet || typeof packet !== 'object') return packet;
+      if (packet.alg !== 'AES-256-CBC' || !packet.data) {
+        return packet; // Plaintext format (向下兼容)
+      }
+      if (!password) {
+        return { __encrypted: true, __raw: packet };
+      }
+
+      try {
+        const enc = new TextEncoder();
+        const salt = Uint8Array.from(atob(packet.salt), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(packet.iv), c => c.charCodeAt(0));
+        const data = Uint8Array.from(atob(packet.data), c => c.charCodeAt(0));
+
+        const keyMaterial = await window.crypto.subtle.importKey(
+          "raw",
+          enc.encode(password),
+          { name: "PBKDF2" },
+          false,
+          ["deriveKey"]
+        );
+
+        const key = await window.crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 100000,
+            hash: "SHA-256"
+          },
+          keyMaterial,
+          { name: "AES-CBC", length: 256 },
+          false,
+          ["decrypt"]
+        );
+
+        const decrypted = await window.crypto.subtle.decrypt(
+          { name: "AES-CBC", iv: iv },
+          key,
+          data
+        );
+
+        const text = new TextDecoder().decode(decrypted);
+        return JSON.parse(text);
+      } catch (err) {
+        console.warn("AES 解密失败:", err);
+        return { __encrypted: true, __raw: packet, __decrypt_error: true };
+      }
+    }
+
+    function unlockWithQuickPassword() {
+      const input = document.getElementById("quick-decrypt-pwd");
+      const pwd = (input ? input.value : "").trim();
+      if (!pwd) return;
+      appConfig.password = pwd;
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
+      const cfgPwd = document.getElementById("cfg-password");
+      if (cfgPwd) cfgPwd.value = pwd;
       fetchClusterData();
     }
 
@@ -732,6 +829,23 @@
       } catch (err) {
         console.warn("API 获取失败:", err);
       }
+
+      // 端到端 AES-256 解密处理
+      const pwd = (appConfig.password || "iota2026").trim();
+      const decryptPromises = nodes.map(n => decryptNodeData(n, pwd));
+      const decryptedNodes = await Promise.all(decryptPromises);
+
+      const hasEncryptedLock = decryptedNodes.some(n => n && n.__encrypted);
+      const unlockBanner = document.getElementById("encryption-unlock-banner");
+      if (unlockBanner) {
+        if (hasEncryptedLock) {
+          unlockBanner.classList.remove("hidden");
+        } else {
+          unlockBanner.classList.add("hidden");
+        }
+      }
+
+      nodes = decryptedNodes.filter(n => n && !n.__encrypted);
 
       // 智能去重：以 Miner ID 为最高优先级，结合物理局域网 IP 与机器名归一化防重
       // 保证 1 台物理设备有且仅有 1 张监控卡片，绝对杜绝别名变更或遗留文件导致的幽灵节点

@@ -4,8 +4,8 @@
   "worker_id": "miner-5FHELSbdDnqfZfVfApfSQrdrgA78QGNrhEbxxn4LaUcJi37C",
   "worker_name": "Macbook M3",
   "ip": "192.168.40.8",
-  "updated_at": 1790820997,
-  "updated_at_str": "2026-09-30 22:16:37",
+  "updated_at": 1790821058,
+  "updated_at_str": "2026-09-30 22:17:38",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 0 | Epoch 55)",
   "proc_running": true,
@@ -16,7 +16,7 @@
   "upload_speed": "6.7 Mbps",
   "download_speed": "40.2 Mbps",
   "speedtest_time": "",
-  "peers_count": 26,
+  "peers_count": 25,
   "restart_count": 0,
   "recent_tokens": "129.41万",
   "cycle_tokens": "52.53万",
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 22:16:36.961] [info]  2026-09-30 22:16:36.961 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"f4f4ba59-e69f-4f84-812e-941096df4c36\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790820996.946068, \"metadata\": {\"activation_id\": \"50b07cc7-cdac-4303-be6d-a2872d5f3f42\", \"direction\": \"forward\"}, \"duration\": 3.054980993270874, \"memory\": {\"mps_allocated_gb\": 4.266914367675781, \"cpu_ram_gb\": 0.4376220703125}}"
+  "last_log": "[2026-09-30 22:17:36.989] [info]  2026-09-30 22:17:36.989 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"2bf099e0-52c3-4b62-8e90-415903425f6e\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790821056.981815, \"metadata\": {\"activation_id\": \"8812fd8a-330f-4711-a0cf-62337524f9e3\", \"direction\": \"backward\"}, \"duration\": 35.16850709915161, \"memory\": {\"mps_allocated_gb\": 2.8947601318359375, \"cpu_ram_gb\": 0.4013671875}}"
 }

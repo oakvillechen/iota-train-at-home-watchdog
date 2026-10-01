@@ -60,13 +60,11 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
     
     # 获取机器标识符与别名：以 miner_id 为唯一识别主体
     hostname = socket.gethostname().split(".")[0]
-    miner_id = status_dict.get("miner_id") or status_dict.get("miner_hotkey") or config.get("miner_id", "")
-    worker_id = config.get("worker_id", "").strip()
-    if not worker_id:
-        if miner_id:
-            worker_id = f"miner-{miner_id}"
-        else:
-            worker_id = f"node-{hostname.lower()}"
+    miner_id = (status_dict.get("miner_id") or status_dict.get("miner_hotkey") or config.get("miner_id", "")).strip()
+    if miner_id and miner_id != "检测中...":
+        worker_id = f"miner-{miner_id}"
+    else:
+        worker_id = config.get("worker_id", "").strip() or f"node-{hostname.lower()}"
     worker_name = config.get("worker_name", "").strip() or f"Mac ({hostname})"
 
     file_path = f"data/{worker_id}.json"

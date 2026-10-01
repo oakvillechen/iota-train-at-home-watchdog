@@ -193,7 +193,8 @@ class ModernButton(tk.Label):
 class IotaWatchdogApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"IOTA Watchdog v{APP_VERSION} - Train at Home 智能监控控制台")
+        self.app_version = updater.get_local_version(fallback=APP_VERSION) if updater else APP_VERSION
+        self.root.title(f"IOTA Watchdog v{self.app_version} - Train at Home 智能监控控制台")
         self.root.geometry("1020x1060")
         self.root.minsize(850, 850)
 
@@ -1453,7 +1454,7 @@ class IotaWatchdogApp:
         top_row.pack(fill=tk.X)
         self.widgets["subcard_toprow"] = top_row
 
-        title_lbl = tk.Label(top_row, text="IOTA Train at Home 智能监控控制台", font=self.font_title)
+        title_lbl = tk.Label(top_row, text=f"IOTA Train at Home 智能监控控制台 (v{self.app_version})", font=self.font_title)
         title_lbl.pack(side=tk.LEFT)
         self.widgets["lbl_title_main"] = title_lbl
 

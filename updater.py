@@ -342,18 +342,31 @@ fi
     except Exception as e:
         print(f"Version prune warning: {e}")
 
+    # 5. 同步更新 /Applications/IOTA Watchdog.app (如果存在且拥有写权限)
+    sys_app = "/Applications/IOTA Watchdog.app"
+    try:
+        if os.path.exists(sys_app) and (os.access(sys_app, os.W_OK) or os.access("/Applications", os.W_OK)):
+            shutil.rmtree(sys_app, ignore_errors=True)
+            shutil.copytree(final_app_path, sys_app)
+    except Exception as e:
+        print(f"Sync /Applications warning: {e}")
+
     return final_app_path
 
 def restart_to_new_app(install_base: str = BASE_INSTALL_DIR):
     """
-    安全退出当前进程并通过 Current symlink 启动最新版 App
+    安全退出当前进程并通过最新版 App 启动
     """
-    current_app = os.path.join(install_base, "Current", "IOTA Watchdog.app")
-    
-    # 启动新版本
-    cmd = ["open", "-n", current_app]
+    running_path = None
+    if getattr(sys, "frozen", False):
+        exe_path = sys.executable
+        if ".app/Contents/MacOS" in exe_path:
+            candidate = exe_path.split(".app/Contents/MacOS")[0] + ".app"
+            if os.path.exists(candidate):
+                running_path = candidate
+
+    target_app = running_path or os.path.join(install_base, "Current", "IOTA Watchdog.app")
+    cmd = ["open", "-n", target_app]
     subprocess.Popen(cmd, start_new_session=True)
-    
-    # 延迟 500ms 后退出当前进程
     time.sleep(0.5)
     os._exit(0)

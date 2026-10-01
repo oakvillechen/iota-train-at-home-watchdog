@@ -155,6 +155,14 @@ if [ "$VERSIONS_COUNT" -gt 2 ]; then
     ls -1dt */ | tail -n +3 | xargs rm -rf
 fi
 
+# 同步更新 /Applications/IOTA Watchdog.app (如果系统目录存在且可写)
+SYS_APP="/Applications/IOTA Watchdog.app"
+if [ -w "$SYS_APP" ] || [ -w "/Applications" ]; then
+    echo "🔄 同步更新 $SYS_APP ..."
+    rm -rf "$SYS_APP"
+    cp -R "$TARGET_VER_DIR/IOTA Watchdog.app" "$SYS_APP"
+fi
+
 echo "============================================="
 echo "🎉 升级完成！当前版本: v$VERSION"
 echo "📂 安装路径: $BASE_DIR/Current"
@@ -164,5 +172,9 @@ echo "============================================="
 # 关闭旧进程并拉起新版
 pkill -f "IOTA Watchdog" 2>/dev/null || true
 sleep 1
-open -n "$BASE_DIR/Current/IOTA Watchdog.app"
+if [ -d "$SYS_APP" ]; then
+    open -n "$SYS_APP"
+else
+    open -n "$BASE_DIR/Current/IOTA Watchdog.app"
+fi
 echo "✅ 已拉起最新版本 IOTA Watchdog！"

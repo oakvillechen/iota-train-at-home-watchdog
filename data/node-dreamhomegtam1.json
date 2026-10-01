@@ -1,0 +1,61 @@
+{
+  "worker_id": "node-dreamhomegtam1",
+  "worker_name": "DreamHomeGTAM1",
+  "ip": "192.168.40.227",
+  "updated_at": 1790817652,
+  "updated_at_str": "2026-09-30 21:20:52",
+  "status": "training",
+  "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
+  "proc_running": true,
+  "layer": "Layer 2",
+  "run_id": "4.12.16.20-tah",
+  "epoch": "Epoch 74",
+  "queue_pos": 0,
+  "upload_speed": "检测中...",
+  "download_speed": "检测中...",
+  "speedtest_time": "",
+  "peers_count": 5,
+  "restart_count": 0,
+  "recent_tokens": "99.24万",
+  "cycle_tokens": "9.47万",
+  "hourly_tokens": [
+    {
+      "range": "21:00~21:19",
+      "tokens": "1.52万",
+      "tokens_num": 1.52,
+      "is_current": true
+    },
+    {
+      "range": "20:00~21:00",
+      "tokens": "7.95万",
+      "tokens_num": 7.95,
+      "is_current": false
+    },
+    {
+      "range": "19:00~20:00",
+      "tokens": "13.94万",
+      "tokens_num": 13.94,
+      "is_current": false
+    },
+    {
+      "range": "18:00~19:00",
+      "tokens": "9.69万",
+      "tokens_num": 9.69,
+      "is_current": false
+    }
+  ],
+  "last_payout": {
+    "amount": 4.238,
+    "amount_str": "4.238 Alpha",
+    "timestamp": 1790813029,
+    "time_str": "09-30 20:03 EDT",
+    "status": "已结算",
+    "display": "4.238 Alpha (已结算) · 09-30 20:03 EDT"
+  },
+  "next_payout": {
+    "timestamp": 1790899200,
+    "time_str": "10-01 20:00 EDT",
+    "display": "10-01 20:00 EDT"
+  },
+  "last_log": "[2026-09-30 21:20:50.615] [info]  2026-09-30 21:20:50.615 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
+}

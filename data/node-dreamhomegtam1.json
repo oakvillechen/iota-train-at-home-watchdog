@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790817958,
-  "updated_at_str": "2026-09-30 21:25:58",
+  "updated_at": 1790818020,
+  "updated_at_str": "2026-09-30 21:27:00",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
@@ -57,5 +57,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:25:56.778] [info]  2026-09-30 21:25:56.776 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 21:26:57.669] [info]  2026-09-30 21:26:57.669 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
 }

@@ -58,9 +58,15 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
     repo = config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog").strip()
     branch = config.get("github_branch", "main").strip()
     
-    # 获取机器标识符与别名
+    # 获取机器标识符与别名：以 miner_id 为唯一识别主体
     hostname = socket.gethostname().split(".")[0]
-    worker_id = config.get("worker_id", "").strip() or f"node-{hostname.lower()}"
+    miner_id = status_dict.get("miner_id") or status_dict.get("miner_hotkey") or config.get("miner_id", "")
+    worker_id = config.get("worker_id", "").strip()
+    if not worker_id:
+        if miner_id:
+            worker_id = f"miner-{miner_id}"
+        else:
+            worker_id = f"node-{hostname.lower()}"
     worker_name = config.get("worker_name", "").strip() or f"Mac ({hostname})"
 
     file_path = f"data/{worker_id}.json"
@@ -96,6 +102,8 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
     now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now_ts))
 
     payload = {
+        "miner_id": miner_id,
+        "miner_hotkey": miner_id,
         "worker_id": worker_id,
         "worker_name": worker_name,
         "ip": get_local_ip(),

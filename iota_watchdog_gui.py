@@ -228,6 +228,15 @@ class IotaWatchdogApp:
 
         # 排队与状态统计数据
         self.miner_hotkey = "检测中..."
+        hk_file = os.path.expanduser("~/.bittensor/wallets/iota/hotkeys/iota_miner")
+        if os.path.exists(hk_file):
+            try:
+                with open(hk_file, "r") as f:
+                    hk_data = json.load(f)
+                    if "ss58Address" in hk_data:
+                        self.miner_hotkey = hk_data["ss58Address"]
+            except Exception:
+                pass
         self.payout_coldkey = "检测中..."
         self.current_layer = "检测中..."
         self.current_network = "IOTA Bittensor Subnet"
@@ -2160,9 +2169,34 @@ class IotaWatchdogApp:
         except ValueError:
             messagebox.showerror("错误", "请输入有效的数字！")
 
+    def get_miner_id(self):
+        """获取链上唯一 Miner ID (ss58Address) 作为全局身份标识"""
+        if hasattr(self, "miner_hotkey") and self.miner_hotkey and self.miner_hotkey != "检测中...":
+            return self.miner_hotkey
+        hk_file = os.path.expanduser("~/.bittensor/wallets/iota/hotkeys/iota_miner")
+        if os.path.exists(hk_file):
+            try:
+                with open(hk_file, "r") as f:
+                    hk_data = json.load(f)
+                    if "ss58Address" in hk_data:
+                        self.miner_hotkey = hk_data["ss58Address"]
+                        return self.miner_hotkey
+            except Exception:
+                pass
+        return ""
+
+    def get_worker_identity(self):
+        """以 Miner ID 作为唯一的云端节点识别键（无论机器别名如何修改，识别键永远唯一不变）"""
+        mid = self.get_miner_id()
+        if mid:
+            return f"miner-{mid}"
+        hostname = socket.gethostname().split(".")[0]
+        return f"node-{hostname.lower()}"
+
     def get_current_telemetry_payload(self):
         """组装节点当前的全面监控遥测快照"""
         import socket
+        miner_id = self.get_miner_id()
         proc_running, _ = self.check_process()
         phase = getattr(self, "current_layer", "待命")
         if hasattr(self, "lbl_node_phase"):
@@ -2235,6 +2269,8 @@ class IotaWatchdogApp:
             last_log = "节点正常运行中"
 
         return {
+            "miner_id": miner_id,
+            "miner_hotkey": miner_id,
             "status": status,
             "phase": phase,
             "proc_running": proc_running,
@@ -2272,7 +2308,9 @@ class IotaWatchdogApp:
                         self.last_cloud_sync_msg = "iota_cluster_sync 模块未载入"
                     else:
                         payload = self.get_current_telemetry_payload()
-                        ok, msg = iota_cluster_sync.upload_worker_status(self.config, payload)
+                        sync_cfg = dict(self.config)
+                        sync_cfg["worker_id"] = self.get_worker_identity()
+                        ok, msg = iota_cluster_sync.upload_worker_status(sync_cfg, payload)
                         self.last_cloud_sync_time = time.time()
                         self.last_cloud_sync_msg = msg
                         if ok:
@@ -2317,10 +2355,14 @@ class IotaWatchdogApp:
             fields.pack(fill=tk.X, pady=(0, 10))
 
             default_hostname = socket.gethostname().split(".")[0]
-            tk.Label(fields, text="机器显示别名 (如: 客厅 Mac Studio / MBP M3):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
+            tk.Label(fields, text="机器显示别名 (仅作为看板展示名称，如: 客厅 Mac Studio / MBP M3):", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(anchor="w", pady=(2, 2))
             ent_name = tk.Entry(fields, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, insertbackground=fg_main, bd=1, relief="solid")
             ent_name.insert(0, self.config.get("worker_name", "") or default_hostname)
-            ent_name.pack(fill=tk.X, ipady=3, pady=(0, 8))
+            ent_name.pack(fill=tk.X, ipady=3, pady=(0, 3))
+
+            cur_mid = self.get_miner_id()
+            mid_txt = f"🆔 节点唯一身份 (Miner ID): {cur_mid}" if cur_mid else "🆔 节点唯一身份: 检测中 (以钱包 Miner Hotkey 为准)"
+            tk.Label(fields, text=mid_txt, font=("Helvetica", 9), bg=bg_main, fg="#0ea5e9").pack(anchor="w", pady=(0, 8))
 
             token_label_frame = tk.Frame(fields, bg=bg_main)
             token_label_frame.pack(fill=tk.X, pady=(2, 2))
@@ -2415,13 +2457,14 @@ class IotaWatchdogApp:
                 btn_test.config(text="⏳ 上报中...")
                 dlg.update()
 
-                w_name = ent_name.get().strip() or socket.gethostname().split('.')[0]
+                w_name = ent_name.get().strip() or default_hostname
                 temp_cfg = {
                     "github_token": token,
                     "github_repo": ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog",
                     "github_branch": self.config.get("github_branch", "main"),
                     "worker_name": w_name,
-                    "worker_id": f"node-{w_name.lower().replace(' ', '-')}"
+                    "worker_id": self.get_worker_identity(),
+                    "miner_id": self.get_miner_id()
                 }
                 payload = self.get_current_telemetry_payload()
 
@@ -2440,7 +2483,7 @@ class IotaWatchdogApp:
 
                         ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
                         if ok:
-                            old_id = self.config.get("worker_id") or (f"node-{self.config.get('worker_name', '').lower().replace(' ', '-')}" if self.config.get("worker_name") else "")
+                            old_id = self.config.get("worker_id")
                             if old_id and old_id != temp_cfg["worker_id"] and hasattr(iota_cluster_sync, "delete_worker_file"):
                                 try:
                                     iota_cluster_sync.delete_worker_file(temp_cfg, old_id)
@@ -2468,14 +2511,14 @@ class IotaWatchdogApp:
                 threading.Thread(target=_async_worker, daemon=True).start()
 
             def _do_save():
-                old_w_name = self.config.get("worker_name", "")
-                old_w_id = self.config.get("worker_id", "") or (f"node-{old_w_name.lower().replace(' ', '-')}" if old_w_name else "")
+                old_w_id = self.config.get("worker_id", "")
 
                 self.config["cloud_sync_enabled"] = sync_var.get()
                 new_w_name = ent_name.get().strip()
                 self.config["worker_name"] = new_w_name
-                new_w_id = f"node-{new_w_name.lower().replace(' ', '-')}" if new_w_name else ""
+                new_w_id = self.get_worker_identity()
                 self.config["worker_id"] = new_w_id
+                self.config["miner_id"] = self.get_miner_id()
 
                 t_input = ent_token.get().strip()
                 if t_input:
@@ -2487,7 +2530,7 @@ class IotaWatchdogApp:
                     self.config["cloud_sync_interval_seconds"] = 60
                 save_config(self.config)
 
-                # 若别名变更，异步清理旧的节点文件
+                # 若旧 ID 存在且与新 ID 不同（如旧版别名格式迁移），清理旧的节点文件
                 if old_w_id and new_w_id and old_w_id != new_w_id:
                     cfg_copy = dict(self.config)
                     def _async_del_old():
@@ -2498,7 +2541,7 @@ class IotaWatchdogApp:
                             pass
                     threading.Thread(target=_async_del_old, daemon=True).start()
 
-                self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 别名: {self.config['worker_name']}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
+                self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 别名: {self.config['worker_name']}, 节点ID: {new_w_id})")
                 dlg.destroy()
 
             def _open_dashboard():

@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 import os
 import sys
+
+# 确保 bundle 目录与当前源码目录在模块检索路径中
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, "frozen", False):
+    _exe_dir = os.path.dirname(sys.executable)
+    _res_dir = os.path.normpath(os.path.join(_exe_dir, "..", "Resources"))
+    for _d in [_exe_dir, _res_dir, getattr(sys, "_MEIPASS", "")]:
+        if _d and os.path.exists(_d) and _d not in sys.path:
+            sys.path.insert(0, _d)
+elif _base_dir not in sys.path:
+    sys.path.insert(0, _base_dir)
+
 import time
 import glob
 import subprocess
@@ -11,7 +23,8 @@ import webbrowser
 from datetime import datetime, timedelta
 try:
     import iota_cluster_sync
-except Exception:
+except Exception as e:
+    print(f"Warning: Failed to import iota_cluster_sync initially: {e}", file=sys.stderr)
     iota_cluster_sync = None
 
 try:
@@ -29,7 +42,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.2"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -2241,6 +2254,12 @@ class IotaWatchdogApp:
         while getattr(self, "running", True):
             try:
                 if self.config.get("cloud_sync_enabled", False):
+                    global iota_cluster_sync
+                    if iota_cluster_sync is None:
+                        try:
+                            import iota_cluster_sync
+                        except Exception:
+                            pass
                     if iota_cluster_sync is None:
                         self.last_cloud_sync_msg = "iota_cluster_sync 模块未载入"
                     else:
@@ -2400,12 +2419,16 @@ class IotaWatchdogApp:
 
                 def _async_worker():
                     try:
+                        global iota_cluster_sync
                         if iota_cluster_sync is None:
-                            dlg.after(0, lambda: [
-                                lbl_msg.config(text="❌ 错误: 未能加载 iota_cluster_sync 模块", fg="#ef4444"),
-                                btn_test.config(text="🚀 测试上报一次")
-                            ])
-                            return
+                            try:
+                                import iota_cluster_sync
+                            except Exception as ex:
+                                dlg.after(0, lambda e=str(ex): [
+                                    lbl_msg.config(text=f"❌ 错误: 未能加载 iota_cluster_sync 模块 ({e})", fg="#ef4444"),
+                                    btn_test.config(text="🚀 测试上报一次")
+                                ])
+                                return
 
                         ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
                         if ok:

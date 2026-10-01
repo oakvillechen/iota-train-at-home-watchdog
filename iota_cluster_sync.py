@@ -11,7 +11,8 @@ import logging
 import os
 import socket
 import time
-import requests
+import urllib.request
+import urllib.error
 
 logger = logging.getLogger("iota_cluster_sync")
 
@@ -68,15 +69,19 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
     # 1. 尝试获取已有文件的 sha (更新已有文件时必须携带 sha)
     sha = None
     try:
-        res = requests.get(f"{api_url}?ref={branch}", headers=headers, timeout=8)
-        if res.status_code == 200:
-            sha = res.json().get("sha")
-        elif res.status_code == 404:
+        req = urllib.request.Request(f"{api_url}?ref={branch}", headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            sha = data.get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
             sha = None  # 文件尚不存在，直接新建
-        elif res.status_code == 401:
+        elif e.code == 401:
             return False, "GitHub Token 无效或已过期 (401 Unauthorized)"
-        elif res.status_code == 403:
+        elif e.code == 403:
             return False, "Token 缺少该仓库的 Contents: Write 权限或触发 Rate Limit (403)"
+        else:
+            return False, f"GitHub API 响应错误 (HTTP {e.code})"
     except Exception as e:
         return False, f"探测现有文件失败: {e}"
 
@@ -123,12 +128,22 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
         body["sha"] = sha
 
     try:
-        put_res = requests.put(api_url, headers=headers, json=body, timeout=10)
-        if put_res.status_code in (200, 201):
-            return True, f"上报成功 ({now_str})"
-        else:
-            err_msg = put_res.json().get("message", put_res.text)
-            return False, f"HTTP {put_res.status_code}: {err_msg}"
+        body_bytes = json.dumps(body).encode("utf-8")
+        put_headers = dict(headers)
+        put_headers["Content-Type"] = "application/json"
+        put_req = urllib.request.Request(api_url, data=body_bytes, headers=put_headers, method="PUT")
+        with urllib.request.urlopen(put_req, timeout=12) as put_resp:
+            if put_resp.status in (200, 201):
+                return True, f"上报成功 ({now_str})"
+            else:
+                return False, f"HTTP {put_resp.status}"
+    except urllib.error.HTTPError as e:
+        try:
+            err_data = json.loads(e.read().decode("utf-8"))
+            err_msg = err_data.get("message", str(e))
+        except Exception:
+            err_msg = str(e)
+        return False, f"HTTP {e.code}: {err_msg}"
     except Exception as e:
         return False, f"网络请求失败: {e}"
 

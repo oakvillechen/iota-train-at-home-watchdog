@@ -31,16 +31,22 @@ echo "Packaging IOTA Watchdog.app with $PY_BIN..."
     --icon "AppIcon.icns" \
     --add-data "icon.png:." \
     --add-data "version.txt:." \
+    --add-data "iota_cluster_sync.py:." \
+    --add-data "updater.py:." \
+    --add-data "theme.py:." \
     --hidden-import iota_cluster_sync \
     --hidden-import theme \
     --hidden-import updater \
+    --hidden-import urllib.request \
+    --hidden-import urllib.error \
+    --hidden-import ssl \
     iota_watchdog_gui.py
 
-# 3. 注入 version.txt 到 .app Bundle 资源目录
+# 3. 注入 version.txt 及支持模块到 .app Bundle 目录
 mkdir -p "dist/IOTA Watchdog.app/Contents/Resources"
 mkdir -p "dist/IOTA Watchdog.app/Contents/MacOS"
-cp version.txt "dist/IOTA Watchdog.app/Contents/Resources/version.txt"
-cp version.txt "dist/IOTA Watchdog.app/Contents/MacOS/version.txt"
+cp version.txt iota_cluster_sync.py updater.py theme.py "dist/IOTA Watchdog.app/Contents/Resources/"
+cp version.txt iota_cluster_sync.py updater.py theme.py "dist/IOTA Watchdog.app/Contents/MacOS/"
 
 # 4. 创建 Zip bundle 与 SHA256 校验和
 echo "Creating Zip bundle & SHA256 checksum..."

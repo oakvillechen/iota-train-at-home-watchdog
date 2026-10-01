@@ -4,8 +4,8 @@
   "worker_id": "miner-5FHELSbdDnqfZfVfApfSQrdrgA78QGNrhEbxxn4LaUcJi37C",
   "worker_name": "Macbook M3",
   "ip": "192.168.40.8",
-  "updated_at": 1790820282,
-  "updated_at_str": "2026-09-30 22:04:42",
+  "updated_at": 1790820343,
+  "updated_at_str": "2026-09-30 22:05:43",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 0 | Epoch 55)",
   "proc_running": true,
@@ -16,7 +16,7 @@
   "upload_speed": "6.7 Mbps",
   "download_speed": "40.2 Mbps",
   "speedtest_time": "",
-  "peers_count": 25,
+  "peers_count": 26,
   "restart_count": 0,
   "recent_tokens": "123.93万",
   "cycle_tokens": "45.65万",
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 22:04:40.433] [info]  2026-09-30 22:04:40.432 | DEBUG    | miner.p2p.stack:_enqueue_after_ack:325 - P2P /activation/push e2b510a3-c1b8-4a06-b95c-c009f0aae06a enqueued (peer=80738b28dcd9a06a...)"
+  "last_log": "[2026-09-30 22:05:43.767] [info]  2026-09-30 22:05:43.767 | INFO     | miner.training.activation_publisher:_process_outbound_item:556 - Activation push OUTBOUND | P2P send | id=3c52cec3-f9df-414a-aebc-5693deb73d19 dir=forward attempt=1/5 candidate_peers=1 tensor_bytes=206377"
 }

@@ -4,8 +4,8 @@
   "worker_id": "miner-5Gq9WWo2LDqLHCaFGbYPvEiA9Gu7NV4FWCucBjwkYNRw3rj6",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790817546,
-  "updated_at_str": "2026-09-30 21:19:06",
+  "updated_at": 1790818301,
+  "updated_at_str": "2026-09-30 21:31:41",
   "status": "training",
   "phase": "🟢 活跃通信中 (Layer 2)",
   "proc_running": true,
@@ -34,5 +34,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:17:05.203] [info]  2026-09-30 21:17:05.203 | INFO     | miner.training.activation_publisher:_process_outbound_item:556 - Activation push OUTBOUND | P2P send | id=e582b7a2-76b4-4d38-826e-bd1870ff5bad dir=backward attempt=1/5 candidate_peers=1 tensor_bytes=206377"
+  "last_log": "[2026-09-30 21:31:38.314] [info]  2026-09-30 21:31:38.314 | DEBUG    | miner.new_miner:_peer_status_broadcast_loop:662 - Peer status dict has 79 entries"
 }

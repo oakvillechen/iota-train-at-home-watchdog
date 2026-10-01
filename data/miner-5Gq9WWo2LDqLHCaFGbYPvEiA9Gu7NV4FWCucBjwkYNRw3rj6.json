@@ -4,8 +4,8 @@
   "worker_id": "miner-5Gq9WWo2LDqLHCaFGbYPvEiA9Gu7NV4FWCucBjwkYNRw3rj6",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790820407,
-  "updated_at_str": "2026-09-30 22:06:47",
+  "updated_at": 1790820468,
+  "updated_at_str": "2026-09-30 22:07:48",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
@@ -59,5 +59,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 22:06:46.898] [info]  2026-09-30 22:06:46.897 | WARNING  | subnet.common_api_client:orchestrator_request:59 - Retrying request to endpoint /miner/complete_multipart_upload (attempt 3)"
+  "last_log": "[2026-09-30 22:07:46.432] [info]  2026-09-30 22:07:46.431 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/heartbeat; response: {'run_id': '4.12.16.20-tah', 'layer': 2, 'epoch': 74, 'phase': 'weights_uploading', 'status': 'uploa"
 }

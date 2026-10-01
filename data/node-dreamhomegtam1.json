@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790815799,
-  "updated_at_str": "2026-09-30 20:49:59",
+  "updated_at": 1790815861,
+  "updated_at_str": "2026-09-30 20:51:01",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
@@ -57,5 +57,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 20:49:58.456] [info]  2026-09-30 20:49:58.453 | DEBUG    | subnet.common_api_client:orchestrator_request:89 - Successfully completed request to /miner/all_layers_training; response: True"
+  "last_log": "[2026-09-30 20:50:57.628] [info]  2026-09-30 20:50:57.628 | WARNING  | subnet.common_api_client:orchestrator_request:59 - Retrying request to endpoint /miner/all_layers_training (attempt 2)"
 }

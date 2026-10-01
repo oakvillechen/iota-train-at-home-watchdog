@@ -103,7 +103,30 @@ def check_for_updates(
                 return {"has_update": False, "error": f"HTTP {resp.status}"}
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        # 403 限流或 404 无 release，静默处理
+        # 403 限流时，自动降级通过网页 302 重定向获取最新 tag (完全无 API 限流)
+        try:
+            web_url = f"https://github.com/{repo}/releases/latest"
+            web_req = urllib.request.Request(web_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(web_req, timeout=timeout) as web_resp:
+                final_url = web_resp.geturl()
+                if "/releases/tag/" in final_url:
+                    fallback_tag = final_url.split("/releases/tag/")[-1].strip()
+                    remote_ver = fallback_tag.lstrip("v")
+                    has_update = is_newer_version(remote_ver, local_ver)
+                    return {
+                        "has_update": has_update,
+                        "remote_version": remote_ver,
+                        "local_version": local_ver,
+                        "has_mac_zip": True,
+                        "zip_url": f"https://github.com/{repo}/releases/download/{fallback_tag}/IOTA-Watchdog-macOS.zip",
+                        "zip_size": 0,
+                        "sha_url": f"https://github.com/{repo}/releases/download/{fallback_tag}/IOTA-Watchdog-macOS.zip.sha256",
+                        "release_notes": "",
+                        "html_url": final_url,
+                        "error": None
+                    }
+        except Exception:
+            pass
         return {"has_update": False, "error": f"GitHub API {e.code}"}
     except Exception as e:
         return {"has_update": False, "error": str(e)}

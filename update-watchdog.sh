@@ -18,9 +18,39 @@ echo "============================================="
 mkdir -p "$BASE_DIR" "$VERSIONS_DIR" "$CACHE_DIR"
 
 echo "🔍 正在检查 GitHub 最新版本..."
-RELEASE_JSON=$(curl -s "https://api.github.com/repos/$REPO/releases/latest")
 
-TAG_NAME=$(echo "$RELEASE_JSON" | grep -m 1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+# 探测 GitHub Token (提高 API 限额或私有访问)
+TOKEN="${GITHUB_TOKEN:-}"
+if [ -z "$TOKEN" ] && [ -f "$HOME/Library/Logs/IOTA Train at Home/.github_token" ]; then
+    TOKEN=$(cat "$HOME/Library/Logs/IOTA Train at Home/.github_token" | tr -d ' \n\r')
+fi
+if [ -z "$TOKEN" ] && [ -f "$HOME/Library/Logs/IOTA Train at Home/watchdog_config.json" ]; then
+    TOKEN=$(grep -o '"github_token": *"[^"]*"' "$HOME/Library/Logs/IOTA Train at Home/watchdog_config.json" | head -n 1 | sed -E 's/.*"github_token": *"([^"]*)".*/\1/')
+fi
+
+AUTH_HEADER=""
+if [ -n "$TOKEN" ]; then
+    AUTH_HEADER="-H \"Authorization: Bearer $TOKEN\""
+fi
+
+TAG_NAME=""
+RELEASE_JSON=$(eval curl -s $AUTH_HEADER "https://api.github.com/repos/$REPO/releases/latest" || true)
+
+if echo "$RELEASE_JSON" | grep -q '"tag_name":'; then
+    TAG_NAME=$(echo "$RELEASE_JSON" | grep -m 1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+    ZIP_URL=$(echo "$RELEASE_JSON" | grep -i 'browser_download_url' | grep -i 'macos' | grep -i '\.zip' | head -n 1 | sed -E 's/.*"browser_download_url": *"([^"]+)".*/\1/')
+    SHA_URL=$(echo "$RELEASE_JSON" | grep -i 'browser_download_url' | grep -i '\.sha256' | head -n 1 | sed -E 's/.*"browser_download_url": *"([^"]+)".*/\1/')
+fi
+
+# 核心降级链路：若匿名 API 限流 (403)，直接通过 GitHub 网页 302 重定向解析最新 tag (100% 成功、零限额)
+if [ -z "$TAG_NAME" ]; then
+    TAG_NAME=$(curl -sI "https://github.com/$REPO/releases/latest" | grep -i "location:" | sed -E 's/.*\/tag\/([^[:space:]\r\n]+).*/\1/')
+    if [ -n "$TAG_NAME" ]; then
+        ZIP_URL="https://github.com/$REPO/releases/download/$TAG_NAME/IOTA-Watchdog-macOS.zip"
+        SHA_URL="https://github.com/$REPO/releases/download/$TAG_NAME/IOTA-Watchdog-macOS.zip.sha256"
+    fi
+fi
+
 if [ -z "$TAG_NAME" ]; then
     echo "❌ 无法获取最新 Release 信息，请检查网络连接。"
     exit 1
@@ -44,10 +74,6 @@ if [ "$CURRENT_VERSION" = "$VERSION" ]; then
         exit 0
     fi
 fi
-
-# 寻找 zip 下载链接
-ZIP_URL=$(echo "$RELEASE_JSON" | grep -i 'browser_download_url' | grep -i 'macos' | grep -i '\.zip' | head -n 1 | sed -E 's/.*"browser_download_url": *"([^"]+)".*/\1/')
-SHA_URL=$(echo "$RELEASE_JSON" | grep -i 'browser_download_url' | grep -i '\.sha256' | head -n 1 | sed -E 's/.*"browser_download_url": *"([^"]+)".*/\1/')
 
 if [ -z "$ZIP_URL" ]; then
     echo "⚠️ 最新 Release ($TAG_NAME) 尚未挂载 macOS 构建包。"

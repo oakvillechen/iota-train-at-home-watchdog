@@ -2440,6 +2440,12 @@ class IotaWatchdogApp:
 
                         ok, res_msg = iota_cluster_sync.upload_worker_status(temp_cfg, payload)
                         if ok:
+                            old_id = self.config.get("worker_id") or (f"node-{self.config.get('worker_name', '').lower().replace(' ', '-')}" if self.config.get("worker_name") else "")
+                            if old_id and old_id != temp_cfg["worker_id"] and hasattr(iota_cluster_sync, "delete_worker_file"):
+                                try:
+                                    iota_cluster_sync.delete_worker_file(temp_cfg, old_id)
+                                except Exception:
+                                    pass
                             self.last_cloud_sync_time = time.time()
                             self.last_cloud_sync_msg = res_msg
                             self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 data/{temp_cfg['worker_id']}.json)")
@@ -2462,8 +2468,15 @@ class IotaWatchdogApp:
                 threading.Thread(target=_async_worker, daemon=True).start()
 
             def _do_save():
+                old_w_name = self.config.get("worker_name", "")
+                old_w_id = self.config.get("worker_id", "") or (f"node-{old_w_name.lower().replace(' ', '-')}" if old_w_name else "")
+
                 self.config["cloud_sync_enabled"] = sync_var.get()
-                self.config["worker_name"] = ent_name.get().strip()
+                new_w_name = ent_name.get().strip()
+                self.config["worker_name"] = new_w_name
+                new_w_id = f"node-{new_w_name.lower().replace(' ', '-')}" if new_w_name else ""
+                self.config["worker_id"] = new_w_id
+
                 t_input = ent_token.get().strip()
                 if t_input:
                     self.config["github_token"] = t_input
@@ -2473,6 +2486,18 @@ class IotaWatchdogApp:
                 except ValueError:
                     self.config["cloud_sync_interval_seconds"] = 60
                 save_config(self.config)
+
+                # 若别名变更，异步清理旧的节点文件
+                if old_w_id and new_w_id and old_w_id != new_w_id:
+                    cfg_copy = dict(self.config)
+                    def _async_del_old():
+                        try:
+                            if iota_cluster_sync and hasattr(iota_cluster_sync, "delete_worker_file"):
+                                iota_cluster_sync.delete_worker_file(cfg_copy, old_w_id)
+                        except Exception:
+                            pass
+                    threading.Thread(target=_async_del_old, daemon=True).start()
+
                 self.append_watchdog_log(f"💾 多机云同步配置已保存 (状态: {'开启' if sync_var.get() else '已禁用'}, 别名: {self.config['worker_name']}, 频率: {self.config['cloud_sync_interval_seconds']}s)")
                 dlg.destroy()
 

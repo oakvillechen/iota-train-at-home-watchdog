@@ -154,6 +154,51 @@ def upload_worker_status(config: dict, status_dict: dict) -> tuple[bool, str]:
         return False, f"网络请求失败: {e}"
 
 
+def delete_worker_file(config: dict, worker_id: str) -> tuple:
+    """
+    通过 GitHub REST API 删除旧的或失效的节点数据文件 data/{worker_id}.json
+    """
+    token = config.get("github_token", "").strip()
+    if not token or not worker_id:
+        return False, "缺少 Token 或 worker_id"
+
+    repo = config.get("github_repo", "oakvillechen/iota-train-at-home-watchdog").strip()
+    branch = config.get("github_branch", "main").strip()
+    file_path = f"data/{worker_id}.json"
+    api_url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": f"IOTA-Watchdog-Sync/{worker_id}"
+    }
+
+    try:
+        req = urllib.request.Request(f"{api_url}?ref={branch}", headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            sha = data.get("sha")
+
+        if not sha:
+            return True, "文件已不存在"
+
+        del_payload = json.dumps({
+            "message": f"telemetry: prune renamed node file {file_path}",
+            "sha": sha,
+            "branch": branch
+        }).encode("utf-8")
+
+        del_req = urllib.request.Request(api_url, data=del_payload, headers=headers, method="DELETE")
+        with urllib.request.urlopen(del_req, timeout=10) as put_resp:
+            return True, f"已清理旧节点文件 {file_path}"
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return True, "文件已不存在"
+        return False, f"HTTP {e.code}"
+    except Exception as e:
+        return False, f"清理失败: {e}"
+
+
 if __name__ == "__main__":
     # 本地快速测试
     print("Testing cluster reporter module...")

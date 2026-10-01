@@ -721,7 +721,27 @@
         console.warn("API 获取失败:", err);
       }
 
-      minersData = nodes;
+      // 智能去重：
+      // 1. 同一 worker_id 去重
+      // 2. 同一物理 IP 仅保留最新活跃的一条记录（避免重命名机器别名导致看板残留旧卡片）
+      const sortedNodes = (nodes || []).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+      const seenIps = new Set();
+      const seenIds = new Set();
+      const dedupedNodes = [];
+
+      for (const n of sortedNodes) {
+        const nid = n.worker_id || n.id || '';
+        const nip = (n.ip || '').trim();
+        if (nid && seenIds.has(nid)) continue;
+        if (nip && nip !== '127.0.0.1' && seenIps.has(nip)) {
+          continue;
+        }
+        if (nid) seenIds.add(nid);
+        if (nip && nip !== '127.0.0.1') seenIps.add(nip);
+        dedupedNodes.push(n);
+      }
+
+      minersData = dedupedNodes;
       renderCluster();
     }
 

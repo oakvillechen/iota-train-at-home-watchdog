@@ -88,12 +88,13 @@ fi
 
 ZIP_FILE="$CACHE_DIR/IOTA-Watchdog-$TAG_NAME.zip"
 echo "⬇️  正在下载构建包: $ZIP_URL"
-curl -L --progress-bar -o "$ZIP_FILE" "$ZIP_URL"
+rm -f "$ZIP_FILE"
+curl -L --http1.1 --retry 5 --retry-delay 2 --retry-connrefused --progress-bar -o "$ZIP_FILE" "$ZIP_URL"
 
 # SHA256 校验
 if [ -n "$SHA_URL" ]; then
     echo "🔒 正在校验 SHA256 完整性..."
-    SHA_EXPECTED=$(curl -sL "$SHA_URL" | awk '{print $1}')
+    SHA_EXPECTED=$(curl -sL --http1.1 "$SHA_URL" | awk '{print $1}')
     SHA_ACTUAL=$(shasum -a 256 "$ZIP_FILE" | awk '{print $1}')
     if [ "$SHA_EXPECTED" != "$SHA_ACTUAL" ]; then
         echo "❌ 校验失败！"

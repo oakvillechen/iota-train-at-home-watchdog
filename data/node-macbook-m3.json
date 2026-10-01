@@ -1,0 +1,61 @@
+{
+  "worker_id": "node-macbook-m3",
+  "worker_name": "Macbook M3",
+  "ip": "192.168.40.8",
+  "updated_at": 1790817986,
+  "updated_at_str": "2026-09-30 21:26:26",
+  "status": "training",
+  "phase": "🚀 正式训练中 (Layer 0 | Epoch 55)",
+  "proc_running": true,
+  "layer": "Layer 0",
+  "run_id": "4.12.16.24-tah",
+  "epoch": "Epoch 55",
+  "queue_pos": 0,
+  "upload_speed": "6.7 Mbps",
+  "download_speed": "40.2 Mbps",
+  "speedtest_time": "",
+  "peers_count": 23,
+  "restart_count": 0,
+  "recent_tokens": "115.72万",
+  "cycle_tokens": "28.77万",
+  "hourly_tokens": [
+    {
+      "range": "21:00~21:23",
+      "tokens": "7.62万",
+      "tokens_num": 7.62,
+      "is_current": true
+    },
+    {
+      "range": "20:00~21:00",
+      "tokens": "21.14万",
+      "tokens_num": 21.14,
+      "is_current": false
+    },
+    {
+      "range": "19:00~20:00",
+      "tokens": "19.33万",
+      "tokens_num": 19.33,
+      "is_current": false
+    },
+    {
+      "range": "18:00~19:00",
+      "tokens": "20.61万",
+      "tokens_num": 20.61,
+      "is_current": false
+    }
+  ],
+  "last_payout": {
+    "amount": 2.508,
+    "amount_str": "2.508 Alpha",
+    "timestamp": 1790813029,
+    "time_str": "09-30 20:03 EDT",
+    "status": "已结算",
+    "display": "2.508 Alpha (已结算) · 09-30 20:03 EDT"
+  },
+  "next_payout": {
+    "timestamp": 1790899200,
+    "time_str": "10-01 20:00 EDT",
+    "display": "10-01 20:00 EDT"
+  },
+  "last_log": "[2026-09-30 21:26:24.012] [info]  2026-09-30 21:26:24.012 | DEBUG    | miner.utils.timer_logger:__aexit__:124 - Timer Logger: {\"id\": \"928a454d-2ab1-49df-bde6-e559d860b170\", \"name\": \"submit_activation\", \"type\": \"end\", \"time\": 1790817983.9980621, \"metadata\": {\"activation_id\": \"189c6f2c-b038-47c3-bae5-57e7e40641e8\", \"direction\": \"backward\"}, \"duration\": 3.673373222351074, \"memory\": {\"mps_allocated_gb\": 2.8947601318359375, \"cpu_ram_gb\": 0.41815185546875}}"
+}

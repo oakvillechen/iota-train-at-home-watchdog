@@ -2,8 +2,8 @@
   "worker_id": "node-dreamhomegtam1",
   "worker_name": "DreamHomeGTAM1",
   "ip": "192.168.40.227",
-  "updated_at": 1790817337,
-  "updated_at_str": "2026-09-30 21:15:37",
+  "updated_at": 1790817399,
+  "updated_at_str": "2026-09-30 21:16:39",
   "status": "training",
   "phase": "🚀 正式训练中 (Layer 2 | Epoch 74)",
   "proc_running": true,
@@ -57,5 +57,5 @@
     "time_str": "10-01 20:00 EDT",
     "display": "10-01 20:00 EDT"
   },
-  "last_log": "[2026-09-30 21:15:35.878] [info]  2026-09-30 21:15:35.878 | ERROR    | subnet.common_api_client:orchestrator_request:97 - Error making orchestrator request to endpoint /miner/all_layers_training: 500 - Internal Server Error"
+  "last_log": "[2026-09-30 21:16:37.795] [info]  2026-09-30 21:16:37.795 | WARNING  | miner.training.activation_publisher:_process_outbound_item:624 - Peer unreachable for backward activation d015363a-b4f9-4fb3-9f31-e304a295299c (connect timeout after 5s), re-enqueuing same target in 1.00s (tries=3/5) | peer=backward[1] layer=1 | req=- | conn=- open=- send=- recv=-"
 }

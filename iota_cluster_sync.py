@@ -313,36 +313,44 @@ def delete_worker_file(config: dict, worker_id: str) -> tuple:
         "User-Agent": f"IOTA-Watchdog-Prune/{worker_id}",
     }
 
-    try:
-        req = urllib.request.Request(
-            f"{api_url}?ref={branch}&_t={int(time.time()*1000)}", headers=headers, method="GET"
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            sha = data.get("sha")
+    for attempt in range(4):
+        try:
+            req = urllib.request.Request(
+                f"{api_url}?ref={branch}&_t={int(time.time()*1000)}", headers=headers, method="GET"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                sha = data.get("sha")
 
-        if not sha:
-            return True, "文件已不存在"
+            if not sha:
+                return True, "文件已不存在"
 
-        del_payload = json.dumps(
-            {
-                "message": f"security: purge unencrypted raw miner file {file_path}",
-                "sha": sha,
-                "branch": branch,
-            }
-        ).encode("utf-8")
+            del_payload = json.dumps(
+                {
+                    "message": f"security: purge unencrypted raw miner file {file_path}",
+                    "sha": sha,
+                    "branch": branch,
+                }
+            ).encode("utf-8")
 
-        del_req = urllib.request.Request(
-            api_url, data=del_payload, headers=headers, method="DELETE"
-        )
-        with urllib.request.urlopen(del_req, timeout=10) as put_resp:
-            return True, f"已清理敏感文件 {file_path}"
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return True, "文件已不存在"
-        return False, f"HTTP {e.code}"
-    except Exception as e:
-        return False, f"清理失败: {e}"
+            del_req = urllib.request.Request(
+                api_url, data=del_payload, headers=headers, method="DELETE"
+            )
+            with urllib.request.urlopen(del_req, timeout=10) as put_resp:
+                return True, f"已清理敏感文件 {file_path}"
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return True, "文件已不存在"
+            if e.code == 409 and attempt < 3:
+                time.sleep(1.5)
+                continue
+            return False, f"HTTP {e.code}"
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(1.5)
+                continue
+            return False, f"清理失败: {e}"
+    return False, "清理重试耗尽"
 
 
 def update_cluster_manifest(config: dict, active_node_slugs: list) -> tuple:

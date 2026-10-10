@@ -351,6 +351,37 @@
       </div>
     </div>
 
+
+    <!-- ================= LIVE 实时遥测 (官方 API) ================= -->
+    <div id="live-telemetry" class="mb-6 p-5 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse" id="live-dot"></span>
+          <span class="font-bold text-[15px] text-[var(--ink)]">LIVE 实时遥测</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono">OFFICIAL API</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--green)]/15 text-[var(--green)] font-mono">AES-256</span>
+        </div>
+        <div class="flex items-center gap-4 font-mono text-[12px] text-[var(--ink-2)]">
+          <span>距结算 <span id="live-countdown" class="text-[var(--ink)] font-semibold">--:--:--</span></span>
+          <span>数据 <span id="live-updated" class="text-[var(--ink)]">—</span></span>
+          <span>刷新 15s</span>
+        </div>
+      </div>
+
+      <div id="live-locked" class="hidden py-8 text-center">
+        <div class="text-3xl mb-2">🔐</div>
+        <div class="text-[13px] text-[var(--ink-2)]">实时遥测已加密。用页面上方的密码解锁后，这里会显示两台矿机的详细状态。</div>
+      </div>
+
+      <div id="live-loading" class="py-8 text-center text-[13px] text-[var(--ink-3)] font-mono">正在拉取实时遥测…</div>
+
+      <div id="live-body" class="hidden">
+        <div id="live-cards" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4"></div>
+        <div class="flex flex-wrap items-center gap-2" id="live-runs"></div>
+        <div class="mt-3 text-[11px] text-[var(--ink-3)] font-mono" id="live-note"></div>
+      </div>
+    </div>
+
     <!-- 节点网格 Matrix (采用宽敞的两列/单列排版，给条形图充足展示空间) -->
     <div id="miners-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- 动态插入 Miner 卡片 -->
@@ -1304,5 +1335,140 @@
     // 页面加载触发
     window.addEventListener("DOMContentLoaded", init);
   </script>
+
+<script>
+/* ============ LIVE 实时遥测：每 15 秒拉取 data/miners.json 并渲染 ============ */
+(function () {
+  var DATA_URL = 'https://raw.githubusercontent.com/oakvillechen/iota-train-at-home-watchdog/main/data/miners.json';
+  var POLL_MS = 15000;
+  var lastData = null;
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) {
+    if (n === null || n === undefined || isNaN(n)) return '--';
+    return Number(n).toLocaleString('en-US');
+  }
+  function pct(f) {
+    if (f === null || f === undefined) return '--';
+    return (f * 100).toFixed(3) + '%';
+  }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function agoText(min) {
+    if (min === null || min === undefined) return '';
+    if (min < 60) return Math.round(min) + ' 分钟';
+    if (min < 1440) return (min / 60).toFixed(1) + ' 小时';
+    return (min / 1440).toFixed(1) + ' 天';
+  }
+  var STATUS = {
+    producing: { t: '产出中', c: 'var(--green)' },
+    stalled:   { t: '已停滞', c: 'var(--amber)' },
+    out:       { t: '不在 run 内', c: 'var(--red)' },
+    unknown:   { t: '未知', c: 'var(--ink-3)' }
+  };
+
+  function nextSettlementMs() {
+    var TZ = 'America/Toronto';
+    var dtf = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    function parts(ms) { var p = {}; dtf.formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; }); return p; }
+    function zoned(y, mo, d, h, mi) {
+      var desired = Date.UTC(y, mo - 1, d, h, mi, 0), guess = desired;
+      for (var i = 0; i < 3; i++) {
+        var p = parts(guess);
+        var asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second);
+        var diff = desired - asUTC; guess += diff; if (diff === 0) break;
+      }
+      return guess;
+    }
+    var now = Date.now();
+    var p = parts(now);
+    var t = zoned(+p.year, +p.month, +p.day, 20, 0);
+    if (t <= now) {
+      var nx = new Date(Date.UTC(+p.year, +p.month - 1, +p.day) + 86400000);
+      t = zoned(nx.getUTCFullYear(), nx.getUTCMonth() + 1, nx.getUTCDate(), 20, 0);
+    }
+    return t;
+  }
+  function tickCountdown() {
+    var el = $('live-countdown'); if (!el) return;
+    var diff = Math.max(0, Math.floor((nextSettlementMs() - Date.now()) / 1000));
+    var h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
+    el.textContent = [h, m, s].map(function (x) { return String(x).padStart(2, '0'); }).join(':');
+  }
+
+  function machineCard(m) {
+    var st = STATUS[m.status] || STATUS.unknown;
+    var rows = [];
+    function row(k, v) { rows.push('<div class="flex items-center justify-between py-1.5 border-b border-[var(--border)]/60 last:border-0"><span class="text-[var(--ink-3)]">' + k + '</span><span class="font-mono text-[var(--ink)]">' + v + '</span></div>'); }
+    if (m.status === 'out') {
+      row('上次所在 run', esc(m.last_run_id || '--') + (m.tier ? ' · ' + esc(m.tier) : ''));
+      row('历史最高 tokens', fmt(m.series_max));
+      row('当前 tokens', '0');
+      row('排名', m.rank ? fmt(m.rank) + ' / ' + fmt(m.num_miners) : '--');
+    } else {
+      row('当前 run', esc(m.run_id || '--') + (m.tier ? ' · ' + esc(m.tier) : ''));
+      row('累计 tokens', fmt(m.tokens));
+      row('贡献占比', pct(m.frac));
+      row('排名', m.rank ? fmt(m.rank) + ' / ' + fmt(m.num_miners) : '--');
+      row('产出速度', m.pace_per_hour !== null && m.pace_per_hour !== undefined ? fmt(m.pace_per_hour) + ' /h' : '--');
+      row('今日产量 (20:00 后)', fmt(m.today_tokens));
+      if (m.status === 'stalled') row('已停滞', agoText(m.flat_minutes));
+    }
+    return '<div class="p-5 rounded-2xl bg-[var(--card-sub)] border border-[var(--border)]">'
+      + '<div class="flex items-center justify-between mb-3">'
+      + '<div class="flex items-center gap-2"><span class="font-bold text-[15px] text-[var(--ink)]">' + esc(m.label) + '</span>'
+      + '<span class="text-[11px] font-mono text-[var(--ink-3)]">…' + esc(m.hotkey_tail || '') + '</span></div>'
+      + '<span class="text-[11px] px-2 py-0.5 rounded-full font-semibold" style="background:color-mix(in srgb,' + st.c + ' 15%, transparent);color:' + st.c + '">' + st.t + '</span>'
+      + '</div>'
+      + '<div class="text-[12.5px]">' + rows.join('') + '</div>'
+      + '</div>';
+  }
+
+  function render(data) {
+    lastData = data;
+    $('live-loading').classList.add('hidden');
+    $('live-locked').classList.add('hidden');
+    $('live-body').classList.remove('hidden');
+    $('live-cards').innerHTML = (data.machines || []).map(machineCard).join('');
+    $('live-runs').innerHTML = (data.runs || []).map(function (r) {
+      return '<span class="text-[11px] font-mono px-2 py-1 rounded-lg bg-[var(--card-sub)] border border-[var(--border)] text-[var(--ink-2)]">'
+        + esc(r.run_id.replace('-tah', '')) + ' <span class="text-[var(--ink-3)]">' + esc(r.tier || '') + '</span></span>';
+    }).join('');
+    var gen = data.generated_at ? new Date(data.generated_at) : null;
+    $('live-updated').textContent = gen ? gen.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false }) : '—';
+    $('live-note').textContent = '来源：Macrocosmos 官方 API · 数据由 GitHub Actions 约每 5 分钟抓取加密，页面每 15 秒刷新 · 今日产量自多伦多 20:00 结算后起算';
+  }
+
+  function showLocked() {
+    $('live-loading').classList.add('hidden');
+    $('live-body').classList.add('hidden');
+    $('live-locked').classList.remove('hidden');
+  }
+
+  async function loadLive() {
+    try {
+      var r = await fetch(DATA_URL + '?_t=' + Date.now());
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var packet = await r.json();
+      var pwd = '';
+      try { pwd = (typeof appConfig !== 'undefined' && appConfig.password) ? appConfig.password : ''; } catch (e) { pwd = ''; }
+      var data = await decryptNodeData(packet, pwd);
+      if (!data || data.__encrypted || !data.machines) { if (!lastData) showLocked(); return; }
+      render(data);
+      var dot = $('live-dot'); if (dot) dot.style.background = 'var(--green)';
+    } catch (e) {
+      var dot2 = $('live-dot'); if (dot2) dot2.style.background = 'var(--amber)';
+      if (!lastData) { $('live-loading').textContent = '实时遥测拉取失败，15 秒后重试…'; }
+    }
+  }
+
+  tickCountdown();
+  setInterval(tickCountdown, 1000);
+  loadLive();
+  setInterval(loadLive, POLL_MS);
+})();
+</script>
 </body>
 </html>

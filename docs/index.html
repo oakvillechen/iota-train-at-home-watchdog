@@ -373,7 +373,7 @@
       <div id="live-loading" class="py-1.5 text-[12px] text-[var(--ink-3)] font-mono">正在拉取实时遥测…</div>
 
       <div id="live-body" class="hidden">
-        <div id="live-cards" class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3"></div>
+        <div id="live-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3"></div>
         <div class="flex flex-wrap items-center gap-2" id="live-runs"></div>
         <div class="mt-3 text-[11px] text-[var(--ink-3)] font-mono" id="live-note"></div>
       </div>
@@ -1395,31 +1395,28 @@
     el.textContent = [h, m, s].map(function (x) { return String(x).padStart(2, '0'); }).join(':');
   }
 
-  function machineCard(m) {
-    var st = STATUS[m.status] || STATUS.unknown;
-    var stats = [];
-    function stat(k, v) { stats.push('<div><div class="text-[10px] text-[var(--ink-3)]">' + k + '</div><div class="font-mono text-[13px] text-[var(--ink)] leading-snug">' + v + '</div></div>'); }
-    if (m.status === 'out') {
-      stat('上次所在 run', esc((m.last_run_id || '--').replace('-tah', '')) + (m.tier ? ' · ' + esc(m.tier) : ''));
-      stat('历史最高 tokens', fmt(m.series_max));
-      stat('当前 tokens', '0');
-      stat('排名', m.rank ? fmt(m.rank) + ' / ' + fmt(m.num_miners) : '--');
-    } else {
-      stat('当前 run', esc((m.run_id || '--').replace('-tah', '')) + (m.tier ? ' · ' + esc(m.tier) : ''));
-      stat('累计 tokens', fmt(m.tokens));
-      stat('贡献占比', pct(m.frac));
-      stat('排名', m.rank ? fmt(m.rank) + ' / ' + fmt(m.num_miners) : '--');
-      stat('产出速度', m.pace_per_hour !== null && m.pace_per_hour !== undefined ? fmt(m.pace_per_hour) + ' /h' : '--');
-      stat('今日产量 (20:00 后)', fmt(m.today_tokens));
-      if (m.status === 'stalled') stat('已停滞', agoText(m.flat_minutes));
-    }
-    return '<div class="p-3.5 rounded-xl bg-[var(--card-sub)] border border-[var(--border)]">'
-      + '<div class="flex items-center justify-between mb-2">'
-      + '<div class="flex items-center gap-2"><span class="font-bold text-[14px] text-[var(--ink)]">' + esc(m.label) + '</span>'
-      + '<span class="text-[11px] font-mono text-[var(--ink-3)]">…' + esc(m.hotkey_tail || '') + '</span></div>'
-      + '<span class="text-[11px] px-2 py-0.5 rounded-full font-semibold" style="background:color-mix(in srgb,' + st.c + ' 15%, transparent);color:' + st.c + '">' + st.t + '</span>'
+  var TIER_ORDER = { Gold: 3, Silver: 2, Bronze: 1, Iron: 0 };
+  var TIER_COLOR = { Gold: '#d97706', Silver: '#64748b', Bronze: '#b45309', Iron: '#6b7280' };
+  function tierName(t) {
+    var m = /Gold|Silver|Bronze|Iron/i.exec(t || '');
+    return m ? m[0].charAt(0).toUpperCase() + m[0].slice(1).toLowerCase() : '';
+  }
+  function runCard(r, here) {
+    var tn = tierName(r.tier);
+    var color = TIER_COLOR[tn] || 'var(--ink-3)';
+    var markers = (here || []).map(function (h) {
+      var c = h.stalled ? 'var(--amber)' : 'var(--indigo)';
+      return '<span class="text-[10px] px-1.5 py-0.5 rounded font-semibold" style="background:color-mix(in srgb,' + c + ' 18%, transparent);color:' + c + '">' + esc(h.label) + ' 在此</span>';
+    }).join(' ');
+    return '<div class="p-3 rounded-xl bg-[var(--card-sub)] border border-[var(--border)]">'
+      + '<div class="flex items-center justify-between gap-2">'
+      + '<span class="font-mono text-[13px] font-semibold text-[var(--ink)]">' + esc((r.run_id || '').replace('-tah', '')) + '</span>'
+      + '<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap" style="background:color-mix(in srgb,' + color + ' 16%, transparent);color:' + color + '">' + esc(r.tier || '') + '</span>'
       + '</div>'
-      + '<div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">' + stats.join('') + '</div>'
+      + '<div class="mt-1.5 flex items-baseline gap-1"><span class="font-mono text-[15px] text-[var(--ink)]">' + fmt(r.num_miners) + '</span><span class="text-[10px] text-[var(--ink-3)]">台矿工</span>'
+      + (r.is_default ? '<span class="text-[10px] text-[var(--ink-3)] ml-1">· 默认</span>' : '')
+      + '</div>'
+      + (markers ? '<div class="mt-1.5 flex flex-wrap gap-1">' + markers + '</div>' : '')
       + '</div>';
   }
 
@@ -1428,14 +1425,21 @@
     $('live-loading').classList.add('hidden');
     $('live-locked').classList.add('hidden');
     $('live-body').classList.remove('hidden');
-    $('live-cards').innerHTML = (data.machines || []).map(machineCard).join('');
-    $('live-runs').innerHTML = (data.runs || []).map(function (r) {
-      return '<span class="text-[11px] font-mono px-2 py-1 rounded-lg bg-[var(--card-sub)] border border-[var(--border)] text-[var(--ink-2)]">'
-        + esc(r.run_id.replace('-tah', '')) + ' <span class="text-[var(--ink-3)]">' + esc(r.tier || '') + '</span></span>';
-    }).join('');
+    var hereByRun = {};
+    (data.machines || []).forEach(function (m) {
+      if (m.run_id) { (hereByRun[m.run_id] = hereByRun[m.run_id] || []).push({ label: m.label, stalled: m.status === 'stalled' }); }
+    });
+    var runsSorted = (data.runs || []).slice().sort(function (x, y) {
+      var d = (TIER_ORDER[tierName(y.tier)] || 0) - (TIER_ORDER[tierName(x.tier)] || 0);
+      return d !== 0 ? d : (y.num_miners || 0) - (x.num_miners || 0);
+    });
+    $('live-cards').innerHTML = runsSorted.length
+      ? runsSorted.map(function (r) { return runCard(r, hereByRun[r.run_id] || []); }).join('')
+      : '<div class="text-[12px] text-[var(--ink-3)]">暂无 run 数据</div>';
+    var runsEl = $('live-runs'); if (runsEl) { runsEl.innerHTML = ''; runsEl.classList.add('hidden'); }
     var gen = data.generated_at ? new Date(data.generated_at) : null;
     $('live-updated').textContent = gen ? gen.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false }) : '—';
-    $('live-note').textContent = '来源：Macrocosmos 官方 API · 数据由 GitHub Actions 约每 5 分钟抓取加密，页面每 15 秒刷新 · 今日产量自多伦多 20:00 结算后起算';
+    $('live-note').textContent = '各 run 矿工数 · 来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新 · 两台机器的详情见下方节点卡';
   }
 
   function showLocked() {

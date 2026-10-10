@@ -98,6 +98,7 @@ function analyzeSeries(points) {
     latestFrac: last.contribution_fraction ?? null,
     maxTokens,
     lastActiveTs,
+    growthTs,
     flatSec,
     pacePerHour,
   };
@@ -119,7 +120,10 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
     const a = analyzeSeries(pts);
     if (!a) continue;
     const rec = { run, a, rank: resp.rank ?? null, numMiners: resp.num_miners ?? null, points: pts };
-    if (a.latestTokens > 0 && (!best || a.latestTs > best.a.latestTs)) best = rec;
+    // Current run = the one whose tokens GREW most recently. A dead series keeps
+    // emitting fresh flat samples, so last-sample time alone picks the wrong run.
+    const growthKey = a.growthTs ?? (pts.length && pts[0].token_count > 0 ? pts[0].timestamp : a.latestTs);
+    if (a.latestTokens > 0 && (!best || growthKey > best.growthKey)) best = { ...rec, growthKey };
     if (!bestHist || (a.lastActiveTs ?? -1) > (bestHist.a.lastActiveTs ?? -1)) bestHist = rec;
   }
   const chosen = best || bestHist;

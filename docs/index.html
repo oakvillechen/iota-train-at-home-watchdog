@@ -150,210 +150,21 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
-
-  <!-- 顶部主导航栏 -->
-  <header class="border-b border-[var(--border)] bg-[var(--nav-bg)] backdrop-blur-md sticky top-0 z-50 transition-colors">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
-      
-      <!-- 品牌标识与标题 -->
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-[var(--indigo-soft)] border border-[var(--indigo)]/20 flex items-center justify-center text-[var(--indigo)] font-bold text-base shadow-sm">
-          ⚡
-        </div>
-        <div>
-          <div class="flex items-center gap-2.5">
-            <h1 class="text-[17px] sm:text-[18px] font-bold text-[var(--ink)] tracking-tight">IOTA // WATCHDOG</h1>
-            <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)]">v2.6 CLUSTER</span>
-          </div>
-          <p class="text-[12px] text-[var(--ink-2)] font-mono flex items-center gap-2 mt-0.5">
-            <span>TRAIN-AT-HOME TELEMETRY</span>
-            <span class="text-[var(--border)]">•</span>
-            <span id="target-repo-tag" class="truncate max-w-[220px] sm:max-w-none">REPO: --</span>
-          </p>
-        </div>
-      </div>
-
-      <!-- 右侧操作区：时钟、同步、日夜主题切换、配置 -->
-      <div class="flex items-center gap-2.5">
-        
-        <!-- 任务时钟 -->
-        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--card-sub)] border border-[var(--border)] font-mono text-[12px] text-[var(--ink-2)]">
-          <span class="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
-          <span id="header-clock">--:--:--</span>
-        </div>
-
-        <!-- 自动同步倒计时 -->
-        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--card-sub)] border border-[var(--border)] font-mono text-[12px] text-[var(--ink-2)]">
-          <span class="text-[var(--ink-3)]">SYNC:</span>
-          <span id="countdown-text" class="text-[var(--indigo)] font-bold">30s</span>
-        </div>
-
-        <!-- 手动刷新按钮 -->
-        <button id="btn-manual-refresh" onclick="manualRefresh()" title="手动刷新" class="ui-btn px-3 py-1.5 rounded-lg bg-[var(--card-sub)] hover:bg-[var(--border)] border border-[var(--border)] text-[var(--ink)] text-[13px] font-medium flex items-center gap-1.5">
-          <svg id="refresh-icon" class="w-4 h-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span class="hidden sm:inline">刷新</span>
-        </button>
-
-        <!-- 一键日夜主题切换器 (Light / Dark / Midnight Neon) -->
-        <div class="flex items-center p-0.5 rounded-lg bg-[var(--card-sub)] border border-[var(--border)] text-[12px] font-medium">
-          <button onclick="setTheme('light')" id="theme-btn-light" title="浅色明亮模式 (默认)" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-[var(--ink-2)]">
-            <span>☀️</span>
-            <span class="hidden sm:inline">浅色</span>
-          </button>
-          <button onclick="setTheme('dark')" id="theme-btn-dark" title="深色沉浸模式" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-[var(--ink-2)]">
-            <span>🌙</span>
-            <span class="hidden sm:inline">深色</span>
-          </button>
-          <button onclick="setTheme('midnight-neon')" id="theme-btn-midnight-neon" title="旧版霓虹黑夜主题" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-[var(--ink-2)]">
-            <span>⚡</span>
-            <span class="hidden sm:inline">霓虹</span>
-          </button>
-        </div>
-
-        <!-- 仓库配置按钮 -->
-        <button onclick="toggleSettingsModal(true)" title="配置仓库与同步参数" class="ui-btn px-2.5 py-1.5 rounded-lg bg-[var(--card-sub)] hover:bg-[var(--border)] border border-[var(--border)] text-[var(--ink-2)] hover:text-[var(--ink)]">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
-
+<body class="min-h-screen flex flex-col">
+  <header class="border-b border-[var(--border)] bg-[var(--card)]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-3">
+      <h1 class="text-[17px] sm:text-[18px] font-bold text-[var(--ink)] tracking-tight">IOTA // WATCHDOG</h1>
+      <div class="flex items-center p-0.5 rounded-lg bg-[var(--card-sub)] border border-[var(--border)]">
+        <button onclick="setTheme('light')" id="theme-btn-light" title="浅色模式" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"><span>☀️</span><span class="hidden sm:inline">浅色</span></button>
+        <button onclick="setTheme('dark')" id="theme-btn-dark" title="深色模式" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"><span>🌙</span><span class="hidden sm:inline">深色</span></button>
+        <button onclick="setTheme('midnight-neon')" id="theme-btn-midnight-neon" title="霓虹模式" class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"><span>⚡</span><span class="hidden sm:inline">霓虹</span></button>
       </div>
     </div>
   </header>
 
-  <!-- 主体内容 -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 flex-1 w-full">
-
-    <!-- 顶部集群关键指标 HUD Strip (字号全面放大到 30px) -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-      
-      <!-- 指标 1: 集群节点 -->
-      <div class="ui-card p-5 flex flex-col justify-between">
-        <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
-          <span>CLUSTER NODES</span>
-          <span class="w-2.5 h-2.5 rounded-full bg-[var(--green)]"></span>
-        </div>
-        <div class="mt-3 flex items-baseline gap-2">
-          <span id="stat-online-nodes" class="text-[30px] font-bold text-[var(--ink)] tracking-tight leading-none">0</span>
-          <span class="text-[14px] text-[var(--ink-2)] font-mono">/ <span id="stat-total-nodes">0</span> ONLINE</span>
-        </div>
-        <div class="mt-4">
-          <div class="w-full bg-[var(--bar-track)] h-1.5 rounded-full overflow-hidden">
-            <div id="stat-nodes-bar" class="bg-[var(--green)] h-full w-0 transition-all duration-500 rounded-full"></div>
-          </div>
-          <div class="text-[12px] text-[var(--ink-2)] font-mono mt-1.5 flex justify-between">
-            <span>在线可用率</span>
-            <span id="stat-nodes-pct" class="text-[var(--green)] font-semibold">100%</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 指标 2: 6小时总贡献 (关键数字 30px) -->
-      <div class="ui-card p-5 flex flex-col justify-between">
-        <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
-          <span>EST. CONTRIBUTIONS</span>
-          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold">6H TOTAL</span>
-        </div>
-        <div class="mt-3 flex items-baseline gap-2">
-          <span id="stat-total-tokens" class="text-[30px] font-bold text-[var(--indigo)] tracking-tight font-mono leading-none">--</span>
-          <span class="text-[14px] text-[var(--ink-2)] font-mono">TOKENS</span>
-        </div>
-        <div class="mt-4 text-[13px] text-[var(--ink-2)] truncate">
-          全集群聚合有效训练产出
-        </div>
-      </div>
-
-      <!-- 指标 3: 综合网络上下行 -->
-      <div class="ui-card p-5 flex flex-col justify-between">
-        <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
-          <span>BANDWIDTH SPEED</span>
-          <span class="text-[11px] font-mono text-[var(--ink-3)]">P2P MESH</span>
-        </div>
-        <div class="mt-3 flex items-baseline gap-4">
-          <div class="flex items-center gap-1.5">
-            <span class="text-[13px] text-[var(--indigo)] font-bold">⬆</span>
-            <span id="stat-avg-up" class="text-[26px] font-bold text-[var(--ink)] font-mono leading-none">--</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-[13px] text-[var(--green)] font-bold">⬇</span>
-            <span id="stat-avg-down" class="text-[26px] font-bold text-[var(--ink)] font-mono leading-none">--</span>
-          </div>
-        </div>
-        <div class="mt-4 text-[13px] text-[var(--ink-2)] truncate">
-          集群测速上行 / 下行平均值
-        </div>
-      </div>
-
-      <!-- 指标 4: 集群健康与告警 -->
-      <div class="ui-card p-5 flex flex-col justify-between">
-        <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
-          <span>ALERT & HEALTH</span>
-          <span id="stat-alert-dot" class="w-2.5 h-2.5 rounded-full bg-[var(--green)]"></span>
-        </div>
-        <div class="mt-3 flex items-baseline gap-2">
-          <span id="stat-alert-count" class="text-[30px] font-bold text-[var(--green)] tracking-tight font-mono leading-none">0</span>
-          <span class="text-[14px] text-[var(--ink-2)] font-mono">WARNINGS</span>
-        </div>
-        <div id="stat-health-status" class="mt-4 text-[13px] text-[var(--green)] font-medium truncate">
-          ALL NODES NOMINAL
-        </div>
-      </div>
-
-    </div>
-
-    <!-- 筛选工具条与搜索框 -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-6 bg-[var(--card)] p-3 rounded-2xl border border-[var(--border)] shadow-sm">
-      
-      <!-- 状态过滤器选项 -->
-      <div class="flex items-center gap-1 text-[13px]">
-        <span class="text-[var(--ink-3)] text-[12px] font-medium uppercase mr-2 tracking-wider">FILTER:</span>
-        <button onclick="setFilter('all')" id="filter-all" class="px-3 py-1.5 rounded-lg bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold transition">全部 (<span id="count-all">0</span>)</button>
-        <button onclick="setFilter('active')" id="filter-active" class="px-3 py-1.5 rounded-lg text-[var(--ink-2)] hover:bg-[var(--card-sub)] transition">训练中 (<span id="count-active">0</span>)</button>
-        <button onclick="setFilter('queue')" id="filter-queue" class="px-3 py-1.5 rounded-lg text-[var(--ink-2)] hover:bg-[var(--card-sub)] transition">排队保护 (<span id="count-queue">0</span>)</button>
-        <button onclick="setFilter('offline')" id="filter-offline" class="px-3 py-1.5 rounded-lg text-[var(--ink-2)] hover:bg-[var(--card-sub)] transition">失联/异常 (<span id="count-offline">0</span>)</button>
-      </div>
-
-      <!-- 搜索框与 Demo 开关 -->
-      <div class="flex items-center gap-3">
-        <div class="relative">
-          <input type="text" id="search-input" oninput="renderCluster()" placeholder="搜索别名 / Miner ID / IP..." class="bg-[var(--card-sub)] border border-[var(--border)] text-[13px] text-[var(--ink)] rounded-lg px-3 py-1.5 pl-8 focus:outline-none focus:border-[var(--indigo)] w-52 sm:w-64 font-mono transition">
-          <svg class="w-4 h-4 text-[var(--ink-3)] absolute left-2.5 top-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-
-        <label class="flex items-center gap-2 cursor-pointer text-[13px] text-[var(--ink-2)] select-none font-mono">
-          <input type="checkbox" id="mock-toggle" onchange="toggleMockData(this.checked)" class="rounded border-[var(--border)] text-[var(--indigo)] focus:ring-0">
-          <span>DEMO 模拟集群</span>
-        </label>
-      </div>
-    </div>
-
-    <!-- AES 解密解锁提示条 (若遇到未解密节点时展示) -->
-    <div id="encryption-unlock-banner" class="hidden mb-6 p-4 rounded-2xl bg-[var(--card)] border border-[var(--indigo)]/40 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-[var(--indigo-soft)] flex items-center justify-center text-lg text-[var(--indigo)] shrink-0">🔐</div>
-        <div>
-          <div class="font-bold text-[14px] text-[var(--ink)] flex items-center gap-2">
-            <span>集群遥测数据已启用端到端 AES-256 加密</span>
-            <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--green)]/15 text-[var(--green)] font-mono">ZERO-KNOWLEDGE</span>
-          </div>
-          <div class="text-[12px] text-[var(--ink-2)] mt-0.5">公网仓库仅存密文，Miner ID、IP 及收益完全保密。请输入密码解锁查看：</div>
-        </div>
-      </div>
-      <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
-        <input type="password" id="quick-decrypt-pwd" placeholder="解密密码 (默认: iota2026)" class="w-full sm:w-48 bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3 py-2 text-[13px] text-[var(--ink)] font-mono focus:outline-none focus:border-[var(--indigo)]">
-        <button onclick="unlockWithQuickPassword()" class="px-4 py-2 rounded-xl bg-[var(--indigo)] hover:bg-[var(--indigo)]/90 text-white text-[13px] font-semibold shrink-0 transition">解锁查看</button>
-      </div>
-    </div>
-
-
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
     <!-- ================= LIVE 实时遥测 (官方 API) ================= -->
-    <div id="live-telemetry" class="mb-4 p-4 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
+    <div id="live-telemetry" class="p-4 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div class="flex items-center gap-2.5">
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse" id="live-dot"></span>
@@ -368,1003 +179,89 @@
         </div>
       </div>
 
-      <div id="live-locked" class="hidden py-1.5 text-[12px] text-[var(--ink-2)]">🔐 实时遥测已加密 — 用页面上方的密码解锁后，这里显示两台矿机的状态。</div>
+      <div id="live-locked" class="hidden py-1.5 flex flex-wrap items-center gap-2">
+        <span class="text-[12px] text-[var(--ink-2)]">🔐 实时遥测已加密，输入页面密码解锁：</span>
+        <input type="password" id="live-pwd" placeholder="页面密码" class="bg-[var(--card-sub)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-[12px] text-[var(--ink)] font-mono focus:outline-none focus:border-[var(--indigo)] w-40">
+        <button id="live-unlock-btn" class="px-3 py-1.5 rounded-lg bg-[var(--indigo)] text-white text-[12px] font-medium">解锁</button>
+        <span id="live-lock-hint" class="text-[11px] text-[var(--ink-3)]"></span>
+      </div>
 
       <div id="live-loading" class="py-1.5 text-[12px] text-[var(--ink-3)] font-mono">正在拉取实时遥测…</div>
 
       <div id="live-body" class="hidden">
         <div id="live-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3"></div>
-        <div class="flex flex-wrap items-center gap-2" id="live-runs"></div>
-        <div class="mt-3 text-[11px] text-[var(--ink-3)] font-mono" id="live-note"></div>
+        <div id="live-machines" class="pt-2.5 border-t border-[var(--border)] text-[12px] text-[var(--ink-2)] leading-relaxed"></div>
+        <div class="mt-2 text-[11px] text-[var(--ink-3)] font-mono">各 run 矿工数 · 来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新</div>
       </div>
     </div>
-
-    <!-- 节点网格 Matrix (采用宽敞的两列/单列排版，给条形图充足展示空间) -->
-    <div id="miners-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- 动态插入 Miner 卡片 -->
-    </div>
-
-    <!-- 空数据状态 -->
-    <div id="empty-state" class="hidden text-center py-20 border border-dashed border-[var(--border)] rounded-2xl bg-[var(--card)]">
-      <div class="w-14 h-14 mx-auto mb-3.5 flex items-center justify-center rounded-2xl bg-[var(--indigo-soft)] text-[var(--indigo)]">
-        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-        </svg>
-      </div>
-      <h3 class="text-[17px] font-bold text-[var(--ink)]">暂无在线矿工节点数据</h3>
-      <p class="text-[14px] text-[var(--ink-2)] mt-1.5 max-w-md mx-auto">尚未探测到任何在线上报的 Watchdog 数据。请确保矿工 Watchdog 客户端正常运行，或勾选右上角 "DEMO 模拟集群" 预览视觉效果。</p>
-      <div class="mt-5 flex justify-center gap-3">
-        <button onclick="document.getElementById('mock-toggle').click()" class="ui-btn px-4 py-2 rounded-xl bg-[var(--indigo)] text-white text-[13px] font-medium shadow-sm">
-          加载 DEMO 示例数据
-        </button>
-        <button onclick="toggleSettingsModal(true)" class="ui-btn px-4 py-2 rounded-xl bg-[var(--card-sub)] border border-[var(--border)] text-[var(--ink)] text-[13px] font-medium">
-          配置 GitHub 仓库
-        </button>
-      </div>
-    </div>
-
   </main>
 
-  <!-- 底部 Footer -->
-  <footer class="mt-auto border-t border-[var(--border)] py-5 text-[13px] text-[var(--ink-2)] bg-[var(--card)]">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-      <div class="flex items-center gap-2 font-mono">
-        <span class="w-2 h-2 rounded-full bg-[var(--green)]"></span>
-        <span class="font-medium text-[var(--ink)]">IOTA Train-at-Home Monitor</span>
-        <span class="text-[var(--border)]">|</span>
-        <span>Linear-Clean Dashboard Edition</span>
-      </div>
-      <div id="footer-time" class="font-mono text-[12px] text-[var(--ink-3)]">
-        TIME: --:--:--
-      </div>
+  <footer class="border-t border-[var(--border)]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 text-[11px] text-[var(--ink-3)] font-mono flex flex-wrap gap-x-4 gap-y-1">
+      <span>IOTA Train at Home · SN9</span>
+      <span>数据经 AES-256 加密存储于仓库，浏览器本地解密</span>
     </div>
   </footer>
 
-  <!-- 仓库设置模态窗 -->
-  <div id="settings-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="ui-card w-full max-w-lg p-6 bg-[var(--card)] border-[var(--border)] shadow-xl">
-      <div class="flex justify-between items-center mb-5 pb-3 border-b border-[var(--border)]">
-        <h3 class="text-[17px] font-bold text-[var(--ink)] flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-[var(--indigo)]"></span>
-          集群仓库与同步配置
-        </h3>
-        <button onclick="toggleSettingsModal(false)" class="text-[var(--ink-3)] hover:text-[var(--ink)] text-lg">✕</button>
-      </div>
-
-      <div class="space-y-4 text-[13px]">
-        <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">GitHub Owner / Repo</label>
-          <input type="text" id="cfg-repo" value="oakvillechen/iota-train-at-home-watchdog" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-          <p class="text-[12px] text-[var(--ink-3)] mt-1">例如: oakvillechen/iota-train-at-home-watchdog</p>
-        </div>
-
-        <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">Git Branch / 分支</label>
-          <input type="text" id="cfg-branch" value="main" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-          <p class="text-[12px] text-[var(--ink-3)] mt-1">存放 data/*.json 的分支，通常为 main</p>
-        </div>
-
-        <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">GitHub Personal Access Token (可选)</label>
-          <input type="password" id="cfg-token" placeholder="github_pat_xxxx 或留空" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-          <p class="text-[12px] text-[var(--ink-3)] mt-1">公开仓库无需填 Token；若遇到 GitHub API 频次受限建议填入以提升体验。</p>
-        </div>
-
-        <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">🔐 端到端 AES 解密密码 (默认: iota2026)</label>
-          <input type="password" id="cfg-password" placeholder="默认: iota2026" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-          <p class="text-[12px] text-[var(--ink-3)] mt-1">若 Watchdog 启用了 AES-256 加密上传，需填入密码解密查看真实 Miner ID 与收益。</p>
-        </div>
-
-        <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">自动刷新间隔 (秒)</label>
-          <select id="cfg-interval" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-            <option value="15">15 秒 (极速遥测)</option>
-            <option value="30" selected>30 秒 (推荐默认)</option>
-            <option value="60">60 秒 (低频节能)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="mt-6 flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-        <button onclick="toggleSettingsModal(false)" class="px-4 py-2 rounded-xl bg-[var(--card-sub)] border border-[var(--border)] text-[var(--ink-2)] hover:text-[var(--ink)] text-[13px] font-medium">取消</button>
-        <button onclick="saveSettings()" class="ui-btn bg-[var(--indigo)] hover:bg-[var(--indigo)]/90 text-white px-5 py-2 rounded-xl text-[13px] font-semibold">保存并同步</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // ================= 全局状态与配置 =================
-    const CONFIG_KEY = "iota_watchdog_dashboard_config";
-    const THEME_KEY = "iota_dashboard_theme";
-
-    let appConfig = {
-      repo: "oakvillechen/iota-train-at-home-watchdog",
-      branch: "main",
-      token: "",
-      interval: 30,
-      password: "iota2026"
-    };
-
-    let minersData = [];
-    let currentFilter = 'all';
-    let countdownSec = 30;
-    let countdownInterval = null;
-    let isMockMode = false;
-    let currentTheme = 'light';
-
-    // 默认内置演示数据
-    const DEMO_MINERS = [
-      {
-        worker_id: "node-dreamhomegtam1",
-        worker_name: "DreamHomeGTAM1",
-        ip: "192.168.40.227",
-        updated_at: Math.floor(Date.now() / 1000) - 25,
-        status: "training",
-        phase: "正式训练中 (Layer 2 | Epoch 72)",
-        proc_running: true,
-        queue_pos: 0,
-        run_id: "4.12.16.20-tah",
-        layer: "Layer 2",
-        epoch: "Epoch 72",
-        upload_speed: "28.5 Mbps",
-        download_speed: "145.2 Mbps",
-        speedtest_time: "17:05",
-        peers_count: 14,
-        restart_count: 0,
-        recent_tokens: "155.56万",
-        hourly_tokens: [
-          { range: "14:00~15:00", tokens: "28.62万", is_current: false },
-          { range: "15:00~16:00", tokens: "25.05万", is_current: false },
-          { range: "16:00~17:00", tokens: "25.29万", is_current: false },
-          { range: "17:00~17:25", tokens: "26.89万", is_current: true }
-        ],
-        last_payout: { amount_str: "2.458 Alpha", time_str: "09-29 20:04 EDT", status: "已入账" },
-        next_payout: { time_str: "09-30 20:00 EDT", timestamp: Math.floor(Date.now() / 1000) + 9300 },
-        last_log: "[2026-09-30 17:24:14.175] [Info] Subnet model update: synced 2.92GB with 14 peers"
-      },
-      {
-        worker_id: "mbp-m3-pro-office",
-        worker_name: "MBP 16\" M3 Pro (Node 02)",
-        ip: "192.168.1.105",
-        updated_at: Math.floor(Date.now() / 1000) - 52,
-        status: "queueing",
-        phase: "排队保护中 (队列第 2 位)",
-        proc_running: true,
-        queue_pos: 2,
-        run_id: "4.12.16.20-tah",
-        layer: "Layer 2",
-        epoch: "Epoch 72",
-        upload_speed: "18.2 Mbps",
-        download_speed: "88.0 Mbps",
-        speedtest_time: "16:58",
-        peers_count: 11,
-        restart_count: 1,
-        recent_tokens: "95.40万",
-        hourly_tokens: [
-          { range: "14:00~15:00", tokens: "21.20万", is_current: false },
-          { range: "15:00~16:00", tokens: "19.80万", is_current: false },
-          { range: "16:00~17:00", tokens: "24.10万", is_current: false },
-          { range: "17:00~17:25", tokens: "18.30万", is_current: true }
-        ],
-        last_payout: { amount_str: "1.890 Alpha", time_str: "09-29 20:04 EDT", status: "已入账" },
-        next_payout: { time_str: "09-30 20:00 EDT", timestamp: Math.floor(Date.now() / 1000) + 9300 },
-        last_log: "[2026-09-30 17:23:55.102] [Info] Node registered in queue pos #2. Standby."
-      }
-    ];
-
-    // ================= 主题切换系统 =================
-    function initTheme() {
-      const savedTheme = localStorage.getItem(THEME_KEY);
-      if (savedTheme && ['light', 'dark', 'midnight-neon'].includes(savedTheme)) {
-        setTheme(savedTheme, false);
-      } else {
-        // 默认采用全新浅色 Linear 风格
-        setTheme('light', false);
-      }
-    }
-
-    function setTheme(themeName, save = true) {
-      currentTheme = themeName;
-      document.documentElement.setAttribute('data-theme', themeName);
-      if (save) localStorage.setItem(THEME_KEY, themeName);
-
-      // 更新切换按钮状态
-      ['light', 'dark', 'midnight-neon'].forEach(t => {
-        const btn = document.getElementById(`theme-btn-${t}`);
-        if (!btn) return;
-        if (t === themeName) {
-          btn.className = "px-2.5 py-1 rounded-md transition-all flex items-center gap-1 bg-[var(--card)] text-[var(--ink)] font-semibold shadow-sm border border-[var(--border)]";
-        } else {
-          btn.className = "px-2.5 py-1 rounded-md transition-all flex items-center gap-1 text-[var(--ink-2)] hover:text-[var(--ink)]";
-        }
-      });
-    }
-
-    // ================= 初始化 =================
-    function init() {
-      initTheme();
-      loadStoredConfig();
-      document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
-      
-      // 时钟驱动
-      updateClock();
-      setInterval(updateClock, 1000);
-
-      // 启动同步循环
-      startSyncCountdown();
-      fetchClusterData();
-    }
-
-    function updateClock() {
-      const now = new Date();
-      const nowTs = Math.floor(now.getTime() / 1000);
-      const localStr = now.toLocaleTimeString();
-      document.getElementById("header-clock").innerText = localStr;
-      document.getElementById("footer-time").innerText = `LOCAL: ${localStr} (${Intl.DateTimeFormat().resolvedOptions().timeZone || 'EDT'})`;
-
-      // 1. 实时每秒动态滚动更新结算倒计时 (T- 02:33:10 -> 09 -> 08...)
-      document.querySelectorAll(".payout-countdown-display").forEach(el => {
-        const tsStr = el.getAttribute("data-target-ts");
-        if (tsStr) {
-          const targetTs = parseInt(tsStr, 10);
-          if (!isNaN(targetTs) && targetTs > 0) {
-            el.innerText = renderCleanNextPayoutCountdown(targetTs);
-          }
-        }
-      });
-
-      // 2. 实时每秒动态更新心跳时差 (XX秒前 / XX分XX秒前)
-      document.querySelectorAll(".heartbeat-display").forEach(el => {
-        const tsStr = el.getAttribute("data-updated-ts");
-        if (tsStr) {
-          const updatedTs = parseInt(tsStr, 10);
-          if (!isNaN(updatedTs) && updatedTs > 0) {
-            const safeAgo = Math.max(0, nowTs - updatedTs);
-            const minsAgo = Math.floor(safeAgo / 60);
-            const secsAgo = safeAgo % 60;
-            let str = "刚刚";
-            if (minsAgo > 0) str = `${minsAgo}分${secsAgo}秒前`;
-            else if (secsAgo > 5) str = `${secsAgo}秒前`;
-            el.innerText = str;
-          }
-        }
-      });
-    }
-
-    function loadStoredConfig() {
-      try {
-        const saved = localStorage.getItem(CONFIG_KEY);
-        if (saved) {
-          appConfig = { ...appConfig, ...JSON.parse(saved) };
-        }
-        // 自动提取 URL Hash / Query 传入的 Token (如从 Watchdog 唤起的本地私有看板)
-        const hashMatch = window.location.hash.match(/token=([^&]+)/);
-        const searchMatch = window.location.search.match(/[?&]token=([^&]+)/);
-        const urlToken = hashMatch ? hashMatch[1] : (searchMatch ? searchMatch[1] : null);
-        if (urlToken) {
-          appConfig.token = decodeURIComponent(urlToken);
-          localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
-          if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, "", window.location.pathname);
-          }
-        }
-      } catch (e) {}
-
-      if (!appConfig.password) {
-        appConfig.password = "iota2026";
-      }
-
-      document.getElementById("cfg-repo").value = appConfig.repo;
-      document.getElementById("cfg-branch").value = appConfig.branch;
-      document.getElementById("cfg-token").value = appConfig.token || "";
-      document.getElementById("cfg-interval").value = appConfig.interval || 30;
-      const pwdInput = document.getElementById("cfg-password");
-      if (pwdInput) pwdInput.value = appConfig.password || "";
-      const qInput = document.getElementById("quick-decrypt-pwd");
-      if (qInput) qInput.value = appConfig.password || "";
-      countdownSec = appConfig.interval || 30;
-    }
-
-    function saveSettings() {
-      appConfig.repo = document.getElementById("cfg-repo").value.trim() || "oakvillechen/iota-train-at-home-watchdog";
-      appConfig.branch = document.getElementById("cfg-branch").value.trim() || "main";
-      appConfig.token = document.getElementById("cfg-token").value.trim();
-      appConfig.interval = parseInt(document.getElementById("cfg-interval").value, 10) || 30;
-      const pwdEl = document.getElementById("cfg-password");
-      if (pwdEl) appConfig.password = pwdEl.value.trim() || "iota2026";
-
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
-      document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
-      toggleSettingsModal(false);
-
-      countdownSec = appConfig.interval;
-      fetchClusterData();
-    }
-
-    function toggleSettingsModal(show) {
-      const modal = document.getElementById("settings-modal");
-      if (show) modal.classList.remove("hidden");
-      else modal.classList.add("hidden");
-    }
-
-    function toggleMockData(checked) {
-      isMockMode = checked;
-      if (checked) {
-        minersData = [...DEMO_MINERS];
-        renderCluster();
-      } else {
-        fetchClusterData();
-      }
-    }
-
-    // ================= 刷新倒计时 =================
-    function startSyncCountdown() {
-      if (countdownInterval) clearInterval(countdownInterval);
-      countdownInterval = setInterval(() => {
-        countdownSec--;
-        if (countdownSec <= 0) {
-          countdownSec = appConfig.interval || 30;
-          fetchClusterData();
-        }
-        document.getElementById("countdown-text").innerText = `${countdownSec}s`;
-      }, 1000);
-    }
-
-    function manualRefresh() {
-      const icon = document.getElementById("refresh-icon");
-      icon.classList.add("rotate-180");
-      setTimeout(() => icon.classList.remove("rotate-180"), 500);
-
-      countdownSec = appConfig.interval || 30;
-      fetchClusterData();
-    }
-
-    // ================= 端到端 AES-256 解密 =================
-    async function decryptNodeData(packet, password) {
-      if (!packet || typeof packet !== 'object') return packet;
-      if (packet.alg !== 'AES-256-CBC' || !packet.data) {
-        return packet; // Plaintext format (向下兼容)
-      }
-      if (!password) {
-        return { __encrypted: true, __raw: packet };
-      }
-
-      try {
-        const enc = new TextEncoder();
-        const salt = Uint8Array.from(atob(packet.salt), c => c.charCodeAt(0));
-        const iv = Uint8Array.from(atob(packet.iv), c => c.charCodeAt(0));
-        const data = Uint8Array.from(atob(packet.data), c => c.charCodeAt(0));
-
-        const keyMaterial = await window.crypto.subtle.importKey(
-          "raw",
-          enc.encode(password),
-          { name: "PBKDF2" },
-          false,
-          ["deriveKey"]
-        );
-
-        const key = await window.crypto.subtle.deriveKey(
-          {
-            name: "PBKDF2",
-            salt: salt,
-            iterations: 100000,
-            hash: "SHA-256"
-          },
-          keyMaterial,
-          { name: "AES-CBC", length: 256 },
-          false,
-          ["decrypt"]
-        );
-
-        const decrypted = await window.crypto.subtle.decrypt(
-          { name: "AES-CBC", iv: iv },
-          key,
-          data
-        );
-
-        const text = new TextDecoder().decode(decrypted);
-        return JSON.parse(text);
-      } catch (err) {
-        console.warn("AES 解密失败:", err);
-        return { __encrypted: true, __raw: packet, __decrypt_error: true };
-      }
-    }
-
-    function unlockWithQuickPassword() {
-      const input = document.getElementById("quick-decrypt-pwd");
-      const pwd = (input ? input.value : "").trim();
-      if (!pwd) return;
-      appConfig.password = pwd;
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
-      const cfgPwd = document.getElementById("cfg-password");
-      if (cfgPwd) cfgPwd.value = pwd;
-      fetchClusterData();
-    }
-
-    // ================= 数据拉取 =================
-    async function fetchClusterData() {
-      if (isMockMode) {
-        minersData = DEMO_MINERS.map(m => ({
-          ...m,
-          updated_at: Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 30)
-        }));
-        renderCluster();
-        return;
-      }
-
-      const headers = { "Accept": "application/vnd.github+json" };
-      if (appConfig.token) {
-        headers["Authorization"] = `Bearer ${appConfig.token}`;
-      }
-
-      let nodes = [];
-
-      try {
-        const apiUrl = `https://api.github.com/repos/${appConfig.repo}/contents/data?ref=${appConfig.branch}&_t=${Date.now()}`;
-        const resp = await fetch(apiUrl, { headers, cache: 'no-store' });
-
-        if (resp.ok) {
-          const files = await resp.json();
-          if (Array.isArray(files)) {
-            const validFiles = files.filter(f => 
-              f.name.endsWith(".json") && 
-              !f.name.toLowerCase().includes("sample") && 
-              !f.name.toLowerCase().includes("manifest")
-            );
-
-            const fetchPromises = validFiles.map(async f => {
-              try {
-                if (appConfig.token && f.git_url) {
-                  const blobHeaders = { 
-                    "Accept": "application/vnd.github.raw+json",
-                    "Authorization": `Bearer ${appConfig.token}`
-                  };
-                  const bRes = await fetch(f.git_url, { headers: blobHeaders });
-                  if (bRes.ok) return await bRes.json();
-                }
-                const sep = f.download_url && f.download_url.includes('?') ? '&' : '?';
-                const rawUrl = `${f.download_url}${sep}_t=${Date.now()}`;
-                const rRes = await fetch(rawUrl);
-                if (rRes.ok) return await rRes.json();
-              } catch (e) {
-                return null;
-              }
-            });
-            const results = await Promise.all(fetchPromises);
-            nodes = results.filter(Boolean);
-          }
-        } else {
-          // GitHub API 403 / 404 备用通道：读取 cluster_manifest.json
-          try {
-            const manifestUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/cluster_manifest.json?_t=${Date.now()}`;
-            const mRes = await fetch(manifestUrl);
-            if (mRes.ok) {
-              const mData = await mRes.json();
-              const nodeIds = mData.nodes || [];
-              const rawPromises = nodeIds.map(async nid => {
-                const nUrl = `https://raw.githubusercontent.com/${appConfig.repo}/${appConfig.branch}/data/${nid}.json?_t=${Date.now()}`;
-                const nr = await fetch(nUrl);
-                return nr.ok ? await nr.json() : null;
-              });
-              const rawResults = await Promise.all(rawPromises);
-              nodes = rawResults.filter(Boolean);
-            }
-          } catch (mErr) {
-            console.warn("Manifest 回退失败:", mErr);
-          }
-        }
-      } catch (err) {
-        console.warn("API 获取失败:", err);
-      }
-
-      // 端到端 AES-256 解密处理
-      const pwd = (appConfig.password || "iota2026").trim();
-      const decryptPromises = nodes.map(n => decryptNodeData(n, pwd));
-      const decryptedNodes = await Promise.all(decryptPromises);
-
-      const hasEncryptedLock = decryptedNodes.some(n => n && n.__encrypted);
-      const unlockBanner = document.getElementById("encryption-unlock-banner");
-      if (unlockBanner) {
-        if (hasEncryptedLock) {
-          unlockBanner.classList.remove("hidden");
-        } else {
-          unlockBanner.classList.add("hidden");
-        }
-      }
-
-      nodes = decryptedNodes.filter(n => n && !n.__encrypted);
-
-      // 智能去重：以 Miner ID 为最高优先级，结合物理局域网 IP 与机器名归一化防重
-      // 保证 1 台物理设备有且仅有 1 张监控卡片，绝对杜绝别名变更或遗留文件导致的幽灵节点
-      const sortedNodes = (nodes || []).sort((a, b) => {
-        const aHasMid = !!(a.miner_id || a.miner_hotkey || (a.worker_id && a.worker_id.startsWith('miner-')));
-        const bHasMid = !!(b.miner_id || b.miner_hotkey || (b.worker_id && b.worker_id.startsWith('miner-')));
-        if (aHasMid !== bHasMid) return aHasMid ? -1 : 1;
-        return (b.updated_at || 0) - (a.updated_at || 0);
-      });
-
-      const seenMinerIds = new Set();
-      const seenIps = new Set();
-      const seenWorkerIds = new Set();
-      const seenNormalizedNames = new Set();
-      const dedupedNodes = [];
-
-      for (const n of sortedNodes) {
-        const mid = (n.miner_id || n.miner_hotkey || (n.worker_id && n.worker_id.startsWith('miner-') ? n.worker_id.replace('miner-', '') : '')).trim();
-        const nip = (n.ip || '').trim();
-        const wid = (n.worker_id || n.id || '').trim();
-        const normName = (n.worker_name || n.worker_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-        // 判定是否与已知节点重复（同一物理设备）：
-        if (mid && seenMinerIds.has(mid)) continue;
-        if (nip && nip !== '127.0.0.1' && nip !== '0.0.0.0' && seenIps.has(nip)) continue;
-        if (normName && normName.length >= 3 && seenNormalizedNames.has(normName)) continue;
-        if (wid && seenWorkerIds.has(wid)) continue;
-
-        // 登记已占用的机器属性
-        if (mid) seenMinerIds.add(mid);
-        if (nip && nip !== '127.0.0.1' && nip !== '0.0.0.0') seenIps.add(nip);
-        if (normName && normName.length >= 3) seenNormalizedNames.add(normName);
-        if (wid) seenWorkerIds.add(wid);
-
-        dedupedNodes.push(n);
-      }
-
-      minersData = dedupedNodes;
-      renderCluster();
-    }
-
-    // ================= 渲染与统计 =================
-    function setFilter(filter) {
-      currentFilter = filter;
-      ['all', 'active', 'queue', 'offline'].forEach(f => {
-        const btn = document.getElementById(`filter-${f}`);
-        if (f === filter) {
-          btn.className = "px-3 py-1.5 rounded-lg bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold transition";
-        } else {
-          btn.className = "px-3 py-1.5 rounded-lg text-[var(--ink-2)] hover:bg-[var(--card-sub)] transition";
-        }
-      });
-      renderCluster();
-    }
-
-    function renderCluster() {
-      const now = Math.floor(Date.now() / 1000);
-      const searchTxt = document.getElementById("search-input").value.toLowerCase().trim();
-
-      let onlineCount = 0;
-      let activeCount = 0;
-      let queueCount = 0;
-      let offlineCount = 0;
-      let totalTokensNum = 0;
-      let totalUpSpeed = 0;
-      let totalDownSpeed = 0;
-      let speedCount = 0;
-
-      const processedMiners = minersData.map(m => {
-        const lastSeenAgo = now - (m.updated_at || 0);
-        // 稳健超时判定：
-        // 1. 进程已死 -> 确定为离线
-        // 2. 进程正常运行且在 25 分钟内有过心跳 -> 确认为在线（若 > 5分钟则标记为同步延迟，仍计入在线）
-        // 3. 超过 25 分钟无任何遥测包 -> 标记为失联
-        const isProcessDead = m.proc_running === false;
-        const isOffline = isProcessDead || lastSeenAgo > 1500;
-        const isStale = !isOffline && lastSeenAgo > 300;
-        
-        let statusCategory = 'active';
-        if (isOffline) {
-          statusCategory = 'offline';
-          offlineCount++;
-        } else if (m.queue_pos && m.queue_pos > 0) {
-          statusCategory = 'queue';
-          queueCount++;
-          onlineCount++;
-        } else {
-          statusCategory = 'active';
-          activeCount++;
-          onlineCount++;
-        }
-
-        if (m.recent_tokens) {
-          const tVal = parseFloat(m.recent_tokens);
-          if (!isNaN(tVal)) totalTokensNum += tVal;
-        }
-
-        if (m.upload_speed) {
-          const upVal = parseFloat(m.upload_speed);
-          if (!isNaN(upVal)) {
-            totalUpSpeed += upVal;
-            speedCount++;
-          }
-        }
-        if (m.download_speed) {
-          const downVal = parseFloat(m.download_speed);
-          if (!isNaN(downVal)) totalDownSpeed += downVal;
-        }
-
-        return {
-          ...m,
-          lastSeenAgo,
-          isOffline,
-          isStale,
-          statusCategory
-        };
-      });
-
-      // 更新顶部统计面板 (字号为统一 30px 大字阶)
-      const totalNodes = minersData.length;
-      document.getElementById("stat-online-nodes").innerText = onlineCount;
-      document.getElementById("stat-total-nodes").innerText = totalNodes;
-      
-      const pct = totalNodes > 0 ? Math.round((onlineCount / totalNodes) * 100) : 100;
-      document.getElementById("stat-nodes-bar").style.width = `${pct}%`;
-      document.getElementById("stat-nodes-pct").innerText = `${pct}%`;
-
-      document.getElementById("stat-total-tokens").innerText = totalTokensNum > 0 ? `${totalTokensNum.toFixed(1)}W` : "--";
-      document.getElementById("stat-avg-up").innerText = speedCount > 0 ? `${(totalUpSpeed / speedCount).toFixed(1)}M` : "--";
-      document.getElementById("stat-avg-down").innerText = speedCount > 0 ? `${(totalDownSpeed / speedCount).toFixed(1)}M` : "--";
-
-      document.getElementById("stat-alert-count").innerText = offlineCount;
-      const alertDot = document.getElementById("stat-alert-dot");
-      const alertStatus = document.getElementById("stat-health-status");
-      const alertCountTxt = document.getElementById("stat-alert-count");
-
-      if (offlineCount > 0) {
-        alertDot.className = "w-2.5 h-2.5 rounded-full bg-[var(--red)] animate-pulse";
-        alertStatus.className = "mt-4 text-[13px] text-[var(--red)] font-semibold truncate";
-        alertStatus.innerText = `${offlineCount} 个节点需要注意`;
-        alertCountTxt.className = "text-[30px] font-bold text-[var(--red)] tracking-tight font-mono leading-none";
-      } else {
-        alertDot.className = "w-2.5 h-2.5 rounded-full bg-[var(--green)]";
-        alertStatus.className = "mt-4 text-[13px] text-[var(--green)] font-medium truncate";
-        alertStatus.innerText = "ALL NODES NOMINAL";
-        alertCountTxt.className = "text-[30px] font-bold text-[var(--green)] tracking-tight font-mono leading-none";
-      }
-
-      // 计数器
-      document.getElementById("count-all").innerText = totalNodes;
-      document.getElementById("count-active").innerText = activeCount;
-      document.getElementById("count-queue").innerText = queueCount;
-      document.getElementById("count-offline").innerText = offlineCount;
-
-      // 过滤与搜索
-      const filtered = processedMiners.filter(m => {
-        if (currentFilter !== 'all' && m.statusCategory !== currentFilter) return false;
-        if (searchTxt) {
-          const matchName = (m.worker_name || "").toLowerCase().includes(searchTxt);
-          const matchId = (m.worker_id || "").toLowerCase().includes(searchTxt);
-          const matchMinerId = (m.miner_id || m.miner_hotkey || "").toLowerCase().includes(searchTxt);
-          const matchIp = (m.ip || "").toLowerCase().includes(searchTxt);
-          if (!matchName && !matchId && !matchMinerId && !matchIp) return false;
-        }
-        return true;
-      });
-
-      const grid = document.getElementById("miners-grid");
-      const emptyState = document.getElementById("empty-state");
-
-      if (filtered.length === 0) {
-        grid.innerHTML = "";
-        emptyState.classList.remove("hidden");
-        return;
-      }
-
-      emptyState.classList.add("hidden");
-      grid.innerHTML = filtered.map(m => renderCleanMinerCard(m)).join("");
-    }
-
-    // ================= 单个节点卡片 (Linear / Vercel 极简设计) =================
-    function renderCleanMinerCard(m) {
-      const isOff = m.isOffline;
-      const isStale = m.isStale;
-      const isQueue = m.statusCategory === 'queue';
-
-      let statusBadge = "";
-      let borderClass = "border-[var(--border)]";
-
-      if (isOff) {
-        borderClass = "border-[var(--red)]/40";
-        const offReason = !m.proc_running ? "PROCESS STOPPED" : `OFFLINE (${Math.floor((m.lastSeenAgo || 0) / 60)}m)`;
-        statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--red-soft)] text-[var(--red)] text-[12px] font-semibold tracking-wide">
-            <span class="w-2 h-2 rounded-full bg-[var(--red)]"></span>
-            ${offReason}
-          </span>
-        `;
-      } else if (isStale) {
-        borderClass = "border-[var(--amber)]/40";
-        const delayM = Math.max(1, Math.floor((m.lastSeenAgo || 0) / 60));
-        statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] text-[12px] font-semibold tracking-wide">
-            <span class="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse"></span>
-            活跃采矿中 (${delayM}分 延迟)
-          </span>
-        `;
-      } else if (isQueue) {
-        statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] text-[12px] font-semibold tracking-wide">
-            <span class="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse"></span>
-            排队保护中 (#${m.queue_pos})
-          </span>
-        `;
-      } else {
-        statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--green-soft)] text-[var(--green)] text-[12px] font-semibold tracking-wide">
-            <span class="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
-            TRAINING ACTIVE
-          </span>
-        `;
-      }
-
-      // 时间换算
-      const safeAgo = Math.max(0, m.lastSeenAgo || 0);
-      const minsAgo = Math.floor(safeAgo / 60);
-      const secsAgo = safeAgo % 60;
-      let timeAgoStr = "刚刚";
-      if (minsAgo > 0) timeAgoStr = `${minsAgo}分${secsAgo}秒前`;
-      else if (secsAgo > 5) timeAgoStr = `${secsAgo}秒前`;
-
-      const fullMinerId = m.miner_id || m.miner_hotkey || (m.worker_id && m.worker_id.startsWith('miner-') ? m.worker_id.replace('miner-', '') : '') || m.worker_id || '--';
-      const shortMinerId = fullMinerId.length > 20 ? `${fullMinerId.slice(0, 8)}...${fullMinerId.slice(-6)}` : fullMinerId;
-
-      return `
-        <div class="ui-card ${borderClass} p-6 flex flex-col justify-between">
-          <div>
-            
-            <!-- 头部：机器名 (18px semibold) + ID/IP + 状态 Pill -->
-            <div class="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-[var(--border)]">
-              <div>
-                <h3 class="text-[18px] font-semibold text-[var(--ink)] tracking-tight flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full ${isOff ? 'bg-[var(--red)]' : 'bg-[var(--green)]'}"></span>
-                  ${escapeHtml(m.worker_name || shortMinerId)}
-                </h3>
-                <div class="text-[12px] text-[var(--ink-2)] font-mono mt-1 flex items-center gap-2 flex-wrap">
-                  <span class="cursor-pointer hover:text-[var(--indigo)] select-all transition-colors inline-flex items-center gap-1.5 bg-[var(--card-sub)] px-2 py-0.5 rounded-md border border-[var(--border)]" title="点击复制完整 Miner ID: ${escapeHtml(fullMinerId)}" onclick="navigator.clipboard.writeText('${escapeHtml(fullMinerId)}'); alert('已复制 Miner ID:\\n${escapeHtml(fullMinerId)}')">
-                    <span class="text-[var(--ink-3)] text-[10px] font-semibold">MINER ID</span>
-                    <span class="font-bold text-[var(--ink)]">${escapeHtml(shortMinerId)}</span>
-                    <span class="text-[11px] opacity-70">📋</span>
-                  </span>
-                  ${m.ip ? `<span class="text-[var(--border)]">•</span><span>IP: ${escapeHtml(m.ip)}</span>` : ''}
-                </div>
-              </div>
-              <div class="shrink-0">
-                ${statusBadge}
-              </div>
-            </div>
-
-            <!-- 核心训练参数 Chips (RUN / LAYER / EPOCH) -->
-            <div class="grid grid-cols-3 gap-2.5 mb-4 font-mono text-[12px]">
-              <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col">
-                <span class="text-[11px] font-medium text-[var(--ink-3)] uppercase">RUN ID</span>
-                <span class="font-semibold text-[var(--ink)] truncate mt-0.5">${escapeHtml(m.run_id || '--')}</span>
-              </div>
-              <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col">
-                <span class="text-[11px] font-medium text-[var(--ink-3)] uppercase">STAGE / LAYER</span>
-                <span class="font-semibold text-[var(--indigo)] truncate mt-0.5">${escapeHtml(m.layer || '--')}</span>
-              </div>
-              <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col">
-                <span class="text-[11px] font-medium text-[var(--ink-3)] uppercase">EPOCH</span>
-                <span class="font-semibold text-[var(--green)] truncate mt-0.5">${escapeHtml(m.epoch || '--')}</span>
-              </div>
-            </div>
-
-            <!-- 当前阶段 Phase (正文 14px) -->
-            <div class="bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 mb-4 flex items-center justify-between text-[13px] sm:text-[14px]">
-              <span class="text-[var(--ink-3)] text-[12px] font-medium uppercase tracking-wider">PHASE:</span>
-              <span class="font-semibold ${isOff ? 'text-[var(--red)]' : 'text-[var(--ink)]'} truncate ml-2">
-                ${escapeHtml(m.phase || (m.proc_running ? '正常运行中' : '进程未启动'))}
-              </span>
-            </div>
-
-            <!-- 小时贡献条形图 (Horizontal Bar Chart) -->
-            <div class="bg-[var(--card-sub)] rounded-2xl p-4 border border-[var(--border)] mb-4">
-              <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] mb-3 flex items-center justify-between">
-                <span class="flex items-center gap-2 text-[var(--ink)] font-semibold">
-                  <span class="w-2 h-2 rounded-full bg-[var(--indigo)]"></span>
-                  <span>HOURLY TOKEN PRODUCTION (近 3~4 小时贡献明细)</span>
-                </span>
-                <span class="px-2.5 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono font-bold text-[12px]">
-                  ${escapeHtml(m.recent_tokens || '--')} 6H SUM
-                </span>
-              </div>
-              ${renderCleanHourlyBarChart(m.hourly_tokens)}
-            </div>
-
-            <!-- 结算记录与倒计时 (关键数字放大为 28px) -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <!-- 最近一次结算 -->
-              <div class="bg-[var(--card-sub)] p-3.5 rounded-2xl border border-[var(--border)] flex flex-col justify-between">
-                <div class="text-[11px] text-[var(--ink-3)] uppercase font-medium flex items-center justify-between">
-                  <span>LAST PAYOUT 结算记录</span>
-                  <span class="px-2 py-0.5 rounded-full bg-[var(--green-soft)] text-[var(--green)] font-semibold text-[11px]">
-                    ${escapeHtml(m.last_payout?.status || '已入账')}
-                  </span>
-                </div>
-                <div class="text-[26px] font-bold text-[var(--green)] font-mono mt-1.5 tracking-tight">
-                  ${escapeHtml(m.last_payout?.amount_str || (m.last_payout?.amount ? m.last_payout.amount + ' Alpha' : '--'))}
-                </div>
-                <div class="text-[12px] text-[var(--ink-2)] font-mono mt-1 truncate">
-                  ${escapeHtml(m.last_payout?.time_str || '--')}
-                </div>
-              </div>
-
-              <!-- 下次结算倒计时 (T- 28px) 实时秒级滚动 -->
-              <div class="bg-[var(--card-sub)] p-3.5 rounded-2xl border border-[var(--border)] flex flex-col justify-between">
-                <div class="text-[11px] text-[var(--ink-3)] uppercase font-medium flex items-center justify-between">
-                  <span>NEXT PAYOUT 下次结算</span>
-                  <span class="text-[var(--indigo)] font-mono font-semibold text-[11px]">20:00 EDT</span>
-                </div>
-                <div class="payout-countdown-display text-[26px] font-bold text-[var(--indigo)] font-mono mt-1.5 tracking-tight" data-target-ts="${m.next_payout?.timestamp || ''}">
-                  ${renderCleanNextPayoutCountdown(m.next_payout?.timestamp)}
-                </div>
-                <div class="text-[12px] text-[var(--ink-2)] font-mono mt-1 truncate">
-                  ${escapeHtml(m.next_payout?.time_str || '今日 20:00 EDT')}
-                </div>
-              </div>
-            </div>
-
-            <!-- 网络测速与 P2P 邻居 -->
-            <div class="grid grid-cols-2 gap-3 mb-4 text-[13px] font-mono">
-              <div class="bg-[var(--card-sub)] p-3 rounded-xl border border-[var(--border)] flex items-center justify-between">
-                <div>
-                  <div class="text-[11px] text-[var(--ink-3)] uppercase">P2P PEER MESH</div>
-                  <div class="text-[16px] font-bold text-[var(--ink)] mt-0.5">
-                    ${m.peers_count !== undefined ? m.peers_count : '--'} <span class="text-[12px] text-[var(--ink-2)] font-normal">PEERS</span>
-                  </div>
-                </div>
-                <span class="w-2.5 h-2.5 rounded-full bg-[var(--green)]"></span>
-              </div>
-
-              <div class="bg-[var(--card-sub)] p-3 rounded-xl border border-[var(--border)]">
-                <div class="text-[11px] text-[var(--ink-3)] uppercase flex items-center justify-between">
-                  <span>SPEEDTEST</span>
-                  ${m.speedtest_time ? `<span class="text-[11px] text-[var(--ink-3)]">${escapeHtml(m.speedtest_time)}</span>` : ''}
-                </div>
-                <div class="text-[13px] font-bold text-[var(--ink)] mt-1 flex items-center gap-3">
-                  <span class="text-[var(--indigo)]">⬆ ${escapeHtml(m.upload_speed || '--')}</span>
-                  <span class="text-[var(--green)]">⬇ ${escapeHtml(m.download_speed || '--')}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 控制台输出 (清晰高对比度暗色控制台) -->
-            <div class="mb-4">
-              <div class="text-[11px] text-[var(--ink-3)] font-mono uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                <span>LATEST TELEMETRY LOG</span>
-                <span>TAIL -1</span>
-              </div>
-              <div class="p-3 rounded-xl border text-[12px] font-mono leading-relaxed break-all max-h-20 overflow-y-auto" style="background: var(--terminal-bg); color: var(--terminal-fg); border-color: var(--terminal-border);">
-                ${escapeHtml(m.last_log || "等待最新控制台输出...")}
-              </div>
-            </div>
-
-          </div>
-
-          <!-- 底部心跳时间与自动恢复计数 (13-14px) 实时秒级刷新 -->
-          <div class="pt-3.5 border-t border-[var(--border)] flex items-center justify-between text-[13px] font-mono text-[var(--ink-2)]">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full ${isOff ? 'bg-[var(--red)]' : 'bg-[var(--green)]'}"></span>
-              <span>心跳: <span class="heartbeat-display ${isOff ? 'text-[var(--red)] font-bold' : 'text-[var(--ink)] font-semibold'}" data-updated-ts="${m.updated_at || ''}">${timeAgoStr}</span></span>
-            </div>
-            <div>
-              自动重启: <span class="text-[var(--ink)] font-bold">${m.restart_count || 0}</span> 次
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    // ================= 小时贡献横向条形图组件 (Horizontal Bar Chart) =================
-    function renderCleanHourlyBarChart(hourlyList) {
-      if (!Array.isArray(hourlyList) || hourlyList.length === 0) {
-        return `
-          <div class="text-[13px] text-[var(--ink-3)] font-mono py-3 text-center">
-            暂无小时细分数据（等待矿工统计上报...）
-          </div>
-        `;
-      }
-
-      // 计算最大值以进行归一化百分比
-      let maxVal = 0.01;
-      const parsedItems = hourlyList.map(h => {
-        let num = 0;
-        if (h.tokens) {
-          const match = String(h.tokens).match(/([0-9.]+)/);
-          if (match) num = parseFloat(match[1]);
-        }
-        if (num > maxVal) maxVal = num;
-        return { ...h, val: num };
-      });
-
-      return `
-        <div class="space-y-2.5 font-mono">
-          ${parsedItems.map(item => {
-            const pct = Math.max(10, Math.min(100, Math.round((item.val / maxVal) * 100)));
-            const barBg = item.is_current ? 'var(--green)' : 'var(--indigo)';
-            
-            return `
-              <div class="flex items-center gap-3 text-[13px]">
-                <!-- 时间段 Label -->
-                <div class="w-24 sm:w-28 text-[var(--ink-2)] text-[12px] flex items-center gap-1.5 shrink-0">
-                  ${item.is_current ? '<span class="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse shrink-0"></span>' : '<span class="w-2 h-2 rounded-full bg-[var(--border)] shrink-0"></span>'}
-                  <span class="${item.is_current ? 'text-[var(--green)] font-semibold' : ''}">${escapeHtml(item.range)}</span>
-                </div>
-
-                <!-- 条形图 Track 与 Fill -->
-                <div class="flex-1 h-5 rounded-md overflow-hidden p-0.5 border border-[var(--border)]" style="background: var(--bar-track);">
-                  <div class="h-full rounded-sm transition-all duration-500" style="width: ${pct}%; background: ${barBg};"></div>
-                </div>
-
-                <!-- 贡献数值 (14px bold) -->
-                <div class="w-20 text-right font-bold text-[14px] text-[var(--ink)] shrink-0">
-                  ${escapeHtml(item.tokens)}
-                </div>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `;
-    }
-
-    // 倒计时 (T- MINUS 格式，26-28px 等宽字体)
-    function renderCleanNextPayoutCountdown(nextTs) {
-      if (!nextTs) return "每日 20:00";
-      const nowTs = Math.floor(Date.now() / 1000);
-      const diff = nextTs - nowTs;
-      if (diff <= 0) return "结算执行中";
-      const hrs = Math.floor(diff / 3600);
-      const mins = Math.floor((diff % 3600) / 60);
-      const secs = diff % 60;
-      return `T- ${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-
-    function escapeHtml(str) {
-      if (!str) return "";
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    // 页面加载触发
-    window.addEventListener("DOMContentLoaded", init);
-  </script>
-
 <script>
-/* ============ LIVE 实时遥测：每 15 秒拉取 data/miners.json 并渲染 ============ */
+/* ===== 主题（与旧版同一套 localStorage 键） ===== */
+var THEME_KEY = 'iota_dashboard_theme';
+function setTheme(name, save) {
+  document.documentElement.setAttribute('data-theme', name);
+  if (save !== false) { try { localStorage.setItem(THEME_KEY, name); } catch (e) {} }
+  ['light', 'dark', 'midnight-neon'].forEach(function (t) {
+    var btn = document.getElementById('theme-btn-' + t);
+    if (!btn) return;
+    btn.className = 'px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ' + (t === name
+      ? 'bg-[var(--card)] text-[var(--ink)] font-semibold shadow-sm border border-[var(--border)]'
+      : 'text-[var(--ink-2)] hover:text-[var(--ink)]');
+  });
+}
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  setTheme(['light', 'dark', 'midnight-neon'].indexOf(saved) >= 0 ? saved : 'light', false);
+})();
+
+/* ===== LIVE 实时遥测 ===== */
 (function () {
   var DATA_URL = 'https://raw.githubusercontent.com/oakvillechen/iota-train-at-home-watchdog/main/data/miners.json';
   var POLL_MS = 15000;
+  var CONFIG_KEY = 'iota_watchdog_dashboard_config';
   var lastData = null;
 
   function $(id) { return document.getElementById(id); }
-  function fmt(n) {
-    if (n === null || n === undefined || isNaN(n)) return '--';
-    return Number(n).toLocaleString('en-US');
+  function fmt(n) { if (n === null || n === undefined || isNaN(n)) return '--'; return Number(n).toLocaleString('en-US'); }
+  function pct(f) { if (f === null || f === undefined) return '--'; return (f * 100).toFixed(3) + '%'; }
+  function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function savedConfig() { try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch (e) { return {}; } }
+  function initialPasswords() {
+    var out = [];
+    var saved = savedConfig().password;
+    if (saved) out.push(saved);
+    if (out.indexOf('iota2026') < 0) out.push('iota2026');
+    return out;
   }
-  function pct(f) {
-    if (f === null || f === undefined) return '--';
-    return (f * 100).toFixed(3) + '%';
+  var pwdCandidates = initialPasswords();
+  function persistPassword(pwd) {
+    try {
+      var cfg = savedConfig(); cfg.password = pwd;
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+    } catch (e) {}
   }
-  function esc(s) {
-    return String(s === null || s === undefined ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /* AES-256-CBC + PBKDF2-SHA256(100k) — 与仓库 data 的加密方案一致 */
+  async function decryptPacket(packet, pwd) {
+    var enc = new TextEncoder();
+    function b64(s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
+    var km = await crypto.subtle.importKey('raw', enc.encode(pwd), { name: 'PBKDF2' }, false, ['deriveKey']);
+    var key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt: b64(packet.salt), iterations: 100000, hash: 'SHA-256' },
+      km, { name: 'AES-CBC', length: 256 }, false, ['decrypt']);
+    var pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: b64(packet.iv) }, key, b64(packet.data));
+    return JSON.parse(new TextDecoder().decode(pt));
   }
-  function agoText(min) {
-    if (min === null || min === undefined) return '';
-    if (min < 60) return Math.round(min) + ' 分钟';
-    if (min < 1440) return (min / 60).toFixed(1) + ' 小时';
-    return (min / 1440).toFixed(1) + ' 天';
-  }
-  var STATUS = {
-    producing: { t: '产出中', c: 'var(--green)' },
-    stalled:   { t: '已停滞', c: 'var(--amber)' },
-    out:       { t: '不在 run 内', c: 'var(--red)' },
-    unknown:   { t: '未知', c: 'var(--ink-3)' }
-  };
 
   function nextSettlementMs() {
     var TZ = 'America/Toronto';
@@ -1420,6 +317,21 @@
       + '</div>';
   }
 
+  var STATUS_TXT = { producing: '产出中', stalled: '已停滞', out: '不在 run 内', unknown: '未知' };
+  function machineLine(m) {
+    var head = '<span class="font-semibold text-[var(--ink)]">' + esc(m.label) + '</span>';
+    if (m.status === 'out') {
+      return head + '：不在任何 run' + (m.last_run_id ? '（上次 ' + esc(m.last_run_id.replace('-tah', '')) + ' · 历史最高 ' + fmt(m.series_max) + '）' : '');
+    }
+    if (m.run_id) {
+      return head + '：' + esc(m.run_id.replace('-tah', '')) + ' · ' + (STATUS_TXT[m.status] || m.status)
+        + ' · ' + fmt(m.tokens) + ' tokens · ' + pct(m.frac)
+        + (m.pace_per_hour ? ' · ' + fmt(m.pace_per_hour) + '/h' : '')
+        + (m.status === 'stalled' && m.flat_minutes ? ' · 已停 ' + m.flat_minutes + ' 分钟' : '');
+    }
+    return head + '：' + (STATUS_TXT[m.status] || '未知');
+  }
+
   function render(data) {
     lastData = data;
     $('live-loading').classList.add('hidden');
@@ -1436,16 +348,17 @@
     $('live-cards').innerHTML = runsSorted.length
       ? runsSorted.map(function (r) { return runCard(r, hereByRun[r.run_id] || []); }).join('')
       : '<div class="text-[12px] text-[var(--ink-3)]">暂无 run 数据</div>';
-    var runsEl = $('live-runs'); if (runsEl) { runsEl.innerHTML = ''; runsEl.classList.add('hidden'); }
+    $('live-machines').innerHTML = (data.machines || []).map(machineLine).join('<span class="text-[var(--ink-3)]"> ｜ </span>');
     var gen = data.generated_at ? new Date(data.generated_at) : null;
     $('live-updated').textContent = gen ? gen.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false }) : '—';
-    $('live-note').textContent = '各 run 矿工数 · 来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新 · 两台机器的详情见下方节点卡';
   }
 
-  function showLocked() {
+  function showLocked(hint) {
+    if (lastData) return;
     $('live-loading').classList.add('hidden');
     $('live-body').classList.add('hidden');
     $('live-locked').classList.remove('hidden');
+    if (hint) $('live-lock-hint').textContent = hint;
   }
 
   async function loadLive() {
@@ -1453,10 +366,15 @@
       var r = await fetch(DATA_URL + '?_t=' + Date.now());
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var packet = await r.json();
-      var pwd = '';
-      try { pwd = (typeof appConfig !== 'undefined' && appConfig.password) ? appConfig.password : ''; } catch (e) { pwd = ''; }
-      var data = await decryptNodeData(packet, pwd);
-      if (!data || data.__encrypted || !data.machines) { if (!lastData) showLocked(); return; }
+      var data = null;
+      if (packet && packet.machines && packet.runs) {
+        data = packet; // 明文（本地测试）
+      } else {
+        for (var i = 0; i < pwdCandidates.length; i++) {
+          try { data = await decryptPacket(packet, pwdCandidates[i]); break; } catch (e) { data = null; }
+        }
+      }
+      if (!data || !data.machines) { showLocked('密码不对，或仓库 Secrets 里的 TELEMETRY_PASSWORD 与页面密码不一致。'); return; }
       render(data);
       var dot = $('live-dot'); if (dot) dot.style.background = 'var(--green)';
     } catch (e) {
@@ -1464,6 +382,18 @@
       if (!lastData) { $('live-loading').textContent = '实时遥测拉取失败，15 秒后重试…'; }
     }
   }
+
+  $('live-unlock-btn').addEventListener('click', function () {
+    var v = $('live-pwd').value.trim();
+    if (!v) return;
+    pwdCandidates = [v];
+    persistPassword(v);
+    $('live-locked').classList.add('hidden');
+    $('live-loading').classList.remove('hidden');
+    $('live-loading').textContent = '正在拉取实时遥测…';
+    loadLive();
+  });
+  $('live-pwd').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('live-unlock-btn').click(); });
 
   tickCountdown();
   setInterval(tickCountdown, 1000);

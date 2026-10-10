@@ -220,6 +220,7 @@ class IotaWatchdogApp:
         # 实时网络吞吐与资产估值状态
         self.live_down_str = "0.0 KB/s"
         self.live_up_str = "0.0 KB/s"
+        self.sn9_usd_price = 0.0
         self.tao_usd_price = 0.0
         self.total_earned_val = 0.0
         self.total_paid_val = 0.0
@@ -500,14 +501,14 @@ class IotaWatchdogApp:
         # Card 4: 收益账单估值
         if hasattr(self, "lbl_kpi_earn_val"):
             earned = getattr(self, "total_earned_val", 0.0)
-            self.lbl_kpi_earn_val.config(text=f"{earned:.3f} Alpha")
-            price = getattr(self, "tao_usd_price", 0.0)
+            self.lbl_kpi_earn_val.config(text=f"{earned:.3f} IOTA")
+            price = getattr(self, "sn9_usd_price", getattr(self, "tao_usd_price", 0.0))
             if hasattr(self, "lbl_kpi_earn_sub"):
                 if price > 0:
-                    self.lbl_kpi_earn_sub.config(text=f"≈ ${earned * price:,.2f} USD (按 ${price:,.1f}/TAO)")
+                    self.lbl_kpi_earn_sub.config(text=f"≈ ${earned * price:,.2f} USD (按 ${price:,.2f}/IOTA)")
                 else:
                     paid = getattr(self, "total_paid_val", 0.0)
-                    self.lbl_kpi_earn_sub.config(text=f"已到账: {paid:.3f} Alpha")
+                    self.lbl_kpi_earn_sub.config(text=f"已到账: {paid:.3f} IOTA")
 
     def get_queue_status_text(self, wait_mins=0.0):
         if self.last_queue_position is None:
@@ -883,16 +884,17 @@ class IotaWatchdogApp:
             except Exception:
                 pass
 
-            # 获取当前 TAO/Alpha 市场价格进行当天市值估算
+            # 获取当前 Subnet 9 (SN9 / IOTA) 市场价格进行当天市值估算
             try:
                 price_req = urllib.request.Request(
-                    "https://api.coingecko.com/api/v3/simple/price?ids=bittensor&vs_currencies=usd",
+                    "https://api.coingecko.com/api/v3/simple/price?ids=iota-2&vs_currencies=usd",
                     headers={"User-Agent": "Mozilla/5.0"}
                 )
                 with urllib.request.urlopen(price_req, timeout=4) as pr:
                     p_data = json.loads(pr.read().decode("utf-8"))
-                    if "bittensor" in p_data and "usd" in p_data["bittensor"]:
-                        self.tao_usd_price = float(p_data["bittensor"]["usd"])
+                    if "iota-2" in p_data and "usd" in p_data["iota-2"]:
+                        self.sn9_usd_price = float(p_data["iota-2"]["usd"])
+                        self.tao_usd_price = self.sn9_usd_price
             except Exception:
                 pass
 
@@ -914,12 +916,12 @@ class IotaWatchdogApp:
                 combined = list(zip(amounts, timestamps, statuses))
                 # 按时间降序排列 (最新结算在最上方)
                 combined.sort(key=lambda x: x[1], reverse=True)
-                price = getattr(self, "tao_usd_price", 0.0)
+                price = getattr(self, "sn9_usd_price", getattr(self, "tao_usd_price", 0.0))
                 for amt, ts, st in combined[:8]:
                     dt_str = datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
                     st_str = "已结算" if st == "settled" else st
                     usd_hint = f" (≈ ${amt * price:,.2f})" if price > 0 else ""
-                    payout_lines.append(f"● {dt_str} EDT: {amt:.3f} Alpha{usd_hint} · {st_str}")
+                    payout_lines.append(f"● {dt_str} EDT: {amt:.3f} IOTA{usd_hint} · {st_str}")
 
                 last_amt = amounts[-1]
                 last_ts = timestamps[-1]
@@ -929,11 +931,11 @@ class IotaWatchdogApp:
                 usd_hint = f" (≈ ${float(last_amt) * price:,.2f})" if price > 0 else ""
                 self.last_payout_info = {
                     "amount": round(float(last_amt), 3),
-                    "amount_str": f"{float(last_amt):.3f} Alpha",
+                    "amount_str": f"{float(last_amt):.3f} IOTA",
                     "timestamp": last_ts,
                     "time_str": f"{dt_str} EDT",
                     "status": st_str,
-                    "display": f"{float(last_amt):.3f} Alpha{usd_hint} ({st_str}) · {dt_str} EDT"
+                    "display": f"{float(last_amt):.3f} IOTA{usd_hint} ({st_str}) · {dt_str} EDT"
                 }
             else:
                 payout_lines.append("暂无历史结算发放记录")
@@ -1120,7 +1122,7 @@ class IotaWatchdogApp:
             anchor_20pm = datetime(anchor_date.year, anchor_date.month, anchor_date.day, 20, 0, 0)
 
             cur_window_delta = 0.0
-            price = getattr(self, "tao_usd_price", 0.0)
+            price = getattr(self, "sn9_usd_price", getattr(self, "tao_usd_price", 0.0))
             for cycle_idx in range(3):
                 c_start = anchor_20pm - timedelta(days=cycle_idx)
                 c_end = c_start + timedelta(days=1)
@@ -1147,24 +1149,24 @@ class IotaWatchdogApp:
                                 break
                     if settled_amt is not None:
                         usd_s = f" ≈ ${settled_amt * price:,.2f}" if price > 0 else ""
-                        hint = f" ✓ 结出 {settled_amt:.3f} Alpha{usd_s}"
+                        hint = f" ✓ 结出 {settled_amt:.3f} IOTA{usd_s}"
                     elif t_wan < 20:
-                        hint = " ⚠️ 产出不足0.4 Alpha未结"
+                        hint = " ⚠️ 产出不足0.4 IOTA未结"
                     else:
                         hint = " ✓ 已计入结算"
 
                 token_lines.append(f"● {s_str} ~ {e_str}{status_tag}: {t_wan:6.2f} 万 Tokens{hint}")
 
             def _update_ui():
-                price = getattr(self, "tao_usd_price", 0.0)
+                price = getattr(self, "sn9_usd_price", getattr(self, "tao_usd_price", 0.0))
                 e_usd = f" (≈${earned * price:,.2f})" if price > 0 else ""
                 p_usd = f" (≈${paid * price:,.2f})" if price > 0 else ""
                 pend_usd = f" (≈${pending * price:,.2f})" if price > 0 else ""
-                price_tag = f" · TAO: ${price:,.1f}" if price > 0 else ""
+                price_tag = f" · SN9 (IOTA): ${price:,.2f}" if price > 0 else ""
 
                 if hasattr(self, "lbl_payout_totals"):
                     self.lbl_payout_totals.config(
-                        text=f"累计总赚取: {earned:.3f} Alpha{e_usd} | 已结算: {paid:.3f} Alpha{p_usd} | 待结: {pending:.3f} Alpha{pend_usd}{price_tag} (起付门槛 {min_pay} Alpha)"
+                        text=f"累计总赚取: {earned:.3f} IOTA{e_usd} | 已结算: {paid:.3f} IOTA{p_usd} | 待结: {pending:.3f} IOTA{pend_usd}{price_tag} (起付门槛 {min_pay} IOTA)"
                     )
                     self.lbl_daily_tokens.config(text="\n".join(token_lines))
                     self.lbl_payout_history.config(text="\n".join(payout_lines))
@@ -1817,7 +1819,7 @@ class IotaWatchdogApp:
         lbl_k4_t.pack(fill=tk.X)
         self.widgets["lbl_kpi4_title"] = lbl_k4_t
 
-        self.lbl_kpi_earn_val = tk.Label(box_kpi4, text="0.000 Alpha", font=self.font_kpi_val, fg="#d97706", anchor="w")
+        self.lbl_kpi_earn_val = tk.Label(box_kpi4, text="0.000 IOTA", font=self.font_kpi_val, fg="#d97706", anchor="w")
         self.lbl_kpi_earn_val.pack(fill=tk.X, pady=(2, 1))
         self.widgets["lbl_kpi_earn_val"] = self.lbl_kpi_earn_val
 
@@ -1893,7 +1895,7 @@ class IotaWatchdogApp:
         payout_top.pack(fill=tk.X, pady=(0, 4))
         self.widgets["subcard_payout_top"] = payout_top
 
-        self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 Alpha | 已结算到账: 0.000 Alpha | 待结转: 0.000 Alpha (起付门槛 0.4 Alpha)", font=self.font_body_bold, anchor="w")
+        self.lbl_payout_totals = tk.Label(payout_top, text="累计总赚取: 0.000 IOTA | 已结算到账: 0.000 IOTA | 待结转: 0.000 IOTA (起付门槛 0.4 IOTA)", font=self.font_body_bold, anchor="w")
         self.lbl_payout_totals.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.widgets["lbl_payout_totals"] = self.lbl_payout_totals
 

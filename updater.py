@@ -277,8 +277,23 @@ def install_and_symlink(
         shutil.rmtree(temp_extract)
     os.makedirs(temp_extract, exist_ok=True)
 
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(temp_extract)
+    # 优先使用 macOS 原生 ditto 解压以完好保留 Unix 权限和符号链接
+    ditto_extracted = False
+    try:
+        subprocess.run(["ditto", "-xk", zip_path, temp_extract], check=True, stderr=subprocess.DEVNULL)
+        ditto_extracted = True
+    except Exception:
+        pass
+
+    if not ditto_extracted:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for member in zf.infolist():
+                zf.extract(member, temp_extract)
+                mode = member.external_attr >> 16
+                if mode:
+                    extracted_file = os.path.join(temp_extract, member.filename)
+                    if os.path.exists(extracted_file):
+                        os.chmod(extracted_file, mode)
 
     # 寻找解压出的 .app 目录
     app_src = None
@@ -299,6 +314,20 @@ def install_and_symlink(
         shutil.rmtree(final_app_path)
     shutil.move(app_src, final_app_path)
     shutil.rmtree(temp_extract)
+
+    # 强制修正 Contents/MacOS 下所有文件的执行权限 (+x)
+    final_macos_dir = os.path.join(final_app_path, "Contents", "MacOS")
+    if os.path.exists(final_macos_dir):
+        for fname in os.listdir(final_macos_dir):
+            fpath = os.path.join(final_macos_dir, fname)
+            if os.path.isfile(fpath):
+                os.chmod(fpath, os.stat(fpath).st_mode | 0o755)
+
+    # 移除 Gatekeeper 隔离属性，防止系统拦截无法打开
+    try:
+        subprocess.run(["xattr", "-rd", "com.apple.quarantine", final_app_path], stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
 
     # 写入版本号标记
     with open(os.path.join(version_dest, "version.txt"), "w", encoding="utf-8") as f:
@@ -347,7 +376,17 @@ fi
     try:
         if os.path.exists(sys_app) and (os.access(sys_app, os.W_OK) or os.access("/Applications", os.W_OK)):
             shutil.rmtree(sys_app, ignore_errors=True)
-            shutil.copytree(final_app_path, sys_app)
+            shutil.copytree(final_app_path, sys_app, symlinks=True)
+            sys_macos_dir = os.path.join(sys_app, "Contents", "MacOS")
+            if os.path.exists(sys_macos_dir):
+                for fname in os.listdir(sys_macos_dir):
+                    fpath = os.path.join(sys_macos_dir, fname)
+                    if os.path.isfile(fpath):
+                        os.chmod(fpath, os.stat(fpath).st_mode | 0o755)
+            try:
+                subprocess.run(["xattr", "-rd", "com.apple.quarantine", sys_app], stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
     except Exception as e:
         print(f"Sync /Applications warning: {e}")
 

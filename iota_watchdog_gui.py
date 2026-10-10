@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.5"
+APP_VERSION = "1.6.6"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -764,8 +764,10 @@ class IotaWatchdogApp:
             if hasattr(self, "banner_zombie") and hasattr(self, "lbl_zombie_msg"):
                 if self.is_zombie:
                     self.lbl_zombie_msg.config(text=self.zombie_alert_text)
-                    if hasattr(self, "widgets") and "card_status" in self.widgets:
-                        self.banner_zombie.pack(before=self.widgets["card_status"], fill=tk.X, pady=(0, 10))
+                    if hasattr(self, "widgets") and "card_kpi" in self.widgets and self.widgets["card_kpi"].winfo_ismapped():
+                        self.banner_zombie.pack(before=self.widgets["card_kpi"], fill=tk.X, pady=(0, 10))
+                    else:
+                        self.banner_zombie.pack(fill=tk.X, pady=(0, 10))
                 else:
                     self.banner_zombie.pack_forget()
         self.root.after(0, _do)
@@ -3296,8 +3298,8 @@ class IotaWatchdogApp:
         self.btn_update_later.pack(side=tk.RIGHT, padx=(6, 0))
         self.btn_update_skip.pack(side=tk.RIGHT, padx=(6, 0))
 
-        target_widget = self.widgets.get("banner_zombie") or self.widgets.get("card_status")
-        if target_widget and target_widget.winfo_exists():
+        target_widget = self.widgets.get("card_kpi")
+        if target_widget and target_widget.winfo_exists() and target_widget.winfo_ismapped():
             self.banner_update.pack(before=target_widget, fill=tk.X, pady=(0, 8))
         else:
             self.banner_update.pack(fill=tk.X, pady=(0, 8))

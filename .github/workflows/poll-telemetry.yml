@@ -1,0 +1,45 @@
+name: Poll Miner Telemetry
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poll-telemetry
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build config from secrets
+        env:
+          M3_HK: ${{ secrets.M3_HOTKEY }}
+          M1_HK: ${{ secrets.M1_HOTKEY }}
+          UNLOCK_KEY: ${{ secrets.TELEMETRY_PASSWORD }}
+        run: |
+          node -e "require('fs').writeFileSync('scripts/telemetry.config.json', JSON.stringify({m3:process.env.M3_HK||'', m1:process.env.M1_HK||'', unlock:process.env.UNLOCK_KEY||''}))"
+
+      - name: Poll official API and write encrypted telemetry
+        run: node scripts/poll-telemetry.mjs
+
+      - name: Commit telemetry data
+        run: |
+          rm -f scripts/telemetry.config.json
+          git config user.name 'telemetry-bot'
+          git config user.email 'telemetry-bot@users.noreply.github.com'
+          git add data/miners.json
+          git diff --cached --quiet || git commit -m 'telemetry: update miners.json'
+          git push

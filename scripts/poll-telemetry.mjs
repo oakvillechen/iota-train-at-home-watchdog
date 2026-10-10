@@ -198,7 +198,7 @@ out.runs = runs.map(r => ({
 }));
 out.network = { active_runs: runs.length, num_miners: out.machines.find(m => m.num_miners)?.num_miners ?? null };
 
-const outPath = process.env.OUTPUT_PATH || 'data/miners.json';
+const outPath = process.env.OUTPUT_PATH || 'data/telemetry/miners.json';
 mkdirSync(dirname(outPath), { recursive: true });
 
 if (process.env.PLAINTEXT === '1') {

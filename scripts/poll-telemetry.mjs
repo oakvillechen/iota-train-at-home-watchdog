@@ -106,6 +106,7 @@ function analyzeSeries(points) {
 async function analyzeMiner(hotkey, runs, boundaryMs) {
   let best = null;      // current run (latest tokens > 0)
   let bestHist = null;  // run with highest historical max (for "last run" when out)
+  const runMiners = {}; // run_id -> num_miners (run-wide, from any miner's response)
   for (const run of runs) {
     let resp;
     try {
@@ -113,6 +114,7 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
     } catch (e) {
       continue;
     }
+    if (resp.num_miners != null) runMiners[run.run_id] = resp.num_miners;
     const pts = (resp.data_points || []).slice().sort((a, b) => a.timestamp - b.timestamp);
     const a = analyzeSeries(pts);
     if (!a) continue;
@@ -121,7 +123,7 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
     if (!bestHist || (a.lastActiveTs ?? -1) > (bestHist.a.lastActiveTs ?? -1)) bestHist = rec;
   }
   const chosen = best || bestHist;
-  if (!chosen) return { status: 'unknown' };
+  if (!chosen) return { status: 'unknown', runMiners };
   const { run, a } = chosen;
   const boundaryVal = valueAt(chosen.points, boundaryMs);
   const todayTokens = a.latestTokens > 0 && boundaryVal !== null
@@ -144,6 +146,7 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
     flat_minutes: a.flatSec !== null ? Math.round(a.flatSec / 60) : null,
     today_tokens: todayTokens,
     updated_ts: a.latestTs,
+    runMiners,
   };
 }
 
@@ -174,14 +177,21 @@ const out = {
   v: 1,
   generated_at: new Date().toISOString(),
   settlement_last: new Date(boundaryMs).toISOString(),
-  runs: runs.map(r => ({ run_id: r.run_id, tier: r.tier, state: r.state, is_default: !!r.is_default })),
+  runs: [],
   machines: [],
 };
+const mergedRunMiners = {};
 for (const m of machines) {
   const res = await analyzeMiner(m.hotkey, runs, boundaryMs);
+  Object.assign(mergedRunMiners, res.runMiners || {});
+  delete res.runMiners;
   out.machines.push({ id: m.id, label: m.label, hotkey_tail: m.hotkey.slice(-6), ...res });
   console.log(m.id, res.status, res.run_id || res.last_run_id, res.tokens);
 }
+out.runs = runs.map(r => ({
+  run_id: r.run_id, tier: r.tier, state: r.state, is_default: !!r.is_default,
+  num_miners: mergedRunMiners[r.run_id] ?? null,
+}));
 out.network = { active_runs: runs.length, num_miners: out.machines.find(m => m.num_miners)?.num_miners ?? null };
 
 const outPath = process.env.OUTPUT_PATH || 'data/miners.json';

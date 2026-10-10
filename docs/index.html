@@ -189,9 +189,11 @@
       <div id="live-loading" class="py-1.5 text-[12px] text-[var(--ink-3)] font-mono">正在拉取实时遥测…</div>
 
       <div id="live-body" class="hidden">
+        <div class="text-[10px] font-semibold tracking-wide text-[var(--ink-3)] mb-1">我的矿机</div>
+        <div id="live-machines" class="mb-3 rounded-xl border border-[var(--border)] bg-[var(--card-sub)] divide-y divide-[var(--border)]"></div>
+        <div class="text-[10px] font-semibold tracking-wide text-[var(--ink-3)] mb-1.5">全部 RUN · 每个 RUN 的矿工数</div>
         <div id="live-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3"></div>
-        <div id="live-machines" class="pt-2.5 border-t border-[var(--border)] text-[12px] text-[var(--ink-2)] leading-relaxed"></div>
-        <div class="mt-2 text-[11px] text-[var(--ink-3)] font-mono">各 run 矿工数 · 来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新</div>
+        <div class="mt-2 text-[11px] text-[var(--ink-3)] font-mono">来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新</div>
       </div>
     </div>
   </main>
@@ -318,18 +320,28 @@ function setTheme(name, save) {
   }
 
   var STATUS_TXT = { producing: '产出中', stalled: '已停滞', out: '不在 run 内', unknown: '未知' };
-  function machineLine(m) {
-    var head = '<span class="font-semibold text-[var(--ink)]">' + esc(m.label) + '</span>';
+  var STATUS_COLOR = { producing: 'var(--green)', stalled: 'var(--amber)', out: 'var(--red)', unknown: 'var(--ink-3)' };
+  function machineRow(m) {
+    var c = STATUS_COLOR[m.status] || 'var(--ink-3)';
+    var badge = '<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap" style="background:color-mix(in srgb,' + c + ' 16%, transparent);color:' + c + '">' + (STATUS_TXT[m.status] || m.status) + '</span>';
+    var detail;
     if (m.status === 'out') {
-      return head + '：不在任何 run' + (m.last_run_id ? '（上次 ' + esc(m.last_run_id.replace('-tah', '')) + ' · 历史最高 ' + fmt(m.series_max) + '）' : '');
-    }
-    if (m.run_id) {
-      return head + '：' + esc(m.run_id.replace('-tah', '')) + ' · ' + (STATUS_TXT[m.status] || m.status)
-        + ' · ' + fmt(m.tokens) + ' tokens · ' + pct(m.frac)
+      detail = '不在任何 run' + (m.last_run_id ? ' · 上次 ' + esc(m.last_run_id.replace('-tah', '')) + ' · 历史最高 ' + fmt(m.series_max) + ' tokens' : '');
+    } else if (m.run_id) {
+      detail = esc(m.run_id.replace('-tah', '')) + ' · ' + fmt(m.tokens) + ' tokens · 占比 ' + pct(m.frac)
+        + (m.rank ? ' · 排名 ' + fmt(m.rank) + '/' + fmt(m.num_miners) : '')
         + (m.pace_per_hour ? ' · ' + fmt(m.pace_per_hour) + '/h' : '')
+        + ' · 今日 ' + fmt(m.today_tokens)
         + (m.status === 'stalled' && m.flat_minutes ? ' · 已停 ' + m.flat_minutes + ' 分钟' : '');
+    } else {
+      detail = STATUS_TXT[m.status] || '未知';
     }
-    return head + '：' + (STATUS_TXT[m.status] || '未知');
+    return '<div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-3 py-2">'
+      + '<span class="font-bold text-[13px] text-[var(--ink)]">' + esc(m.label) + '</span>'
+      + '<span class="text-[11px] font-mono text-[var(--ink-3)]">…' + esc(m.hotkey_tail || '') + '</span>'
+      + badge
+      + '<span class="text-[12px] text-[var(--ink-2)]">' + detail + '</span>'
+      + '</div>';
   }
 
   function render(data) {
@@ -348,7 +360,7 @@ function setTheme(name, save) {
     $('live-cards').innerHTML = runsSorted.length
       ? runsSorted.map(function (r) { return runCard(r, hereByRun[r.run_id] || []); }).join('')
       : '<div class="text-[12px] text-[var(--ink-3)]">暂无 run 数据</div>';
-    $('live-machines').innerHTML = (data.machines || []).map(machineLine).join('<span class="text-[var(--ink-3)]"> ｜ </span>');
+    $('live-machines').innerHTML = (data.machines || []).map(machineRow).join('');
     var gen = data.generated_at ? new Date(data.generated_at) : null;
     $('live-updated').textContent = gen ? gen.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false }) : '—';
   }

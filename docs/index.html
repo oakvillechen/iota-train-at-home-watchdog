@@ -363,7 +363,10 @@ function setTheme(name, save) {
 
   async function loadLive() {
     try {
-      var r = await fetch(DATA_URL + '?_t=' + Date.now());
+      var ctl = ('AbortController' in window) ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function () { ctl.abort(); }, 10000) : null;
+      var r = await fetch(DATA_URL + '?_t=' + Date.now(), ctl ? { signal: ctl.signal } : {});
+      if (timer) clearTimeout(timer);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var packet = await r.json();
       var data = null;
@@ -379,7 +382,10 @@ function setTheme(name, save) {
       var dot = $('live-dot'); if (dot) dot.style.background = 'var(--green)';
     } catch (e) {
       var dot2 = $('live-dot'); if (dot2) dot2.style.background = 'var(--amber)';
-      if (!lastData) { $('live-loading').textContent = '实时遥测拉取失败，15 秒后重试…'; }
+      if (!lastData) {
+        $('live-loading').textContent = '实时遥测拉取失败，15 秒后重试…';
+        showLocked('暂时拉不到数据；若你的页面密码与仓库 Secret 一致，也可在此重新输入确认。');
+      }
     }
   }
 

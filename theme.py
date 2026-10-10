@@ -38,8 +38,8 @@ THEMES = {
         "btn_neutral_fg": "#4F46E5",
         "btn_exit_bg": "#E02424",
         "btn_exit_hover": "#C81E1E",
-        "log_bg": "#0F172A",
-        "log_fg": "#F8FAFC",
+        "log_bg": "#FFFFFF",
+        "log_fg": "#141A26",
     },
     "dark": {
         # 语义色板

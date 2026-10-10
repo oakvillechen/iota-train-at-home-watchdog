@@ -122,7 +122,7 @@ except Exception:
             "entry_bg": "#FFFFFF", "entry_fg": "#4F46E5",
             "btn_neutral_bg": "#ECEEFE", "btn_neutral_hover": "#E0E3FA", "btn_neutral_fg": "#4F46E5",
             "btn_exit_bg": "#E02424", "btn_exit_hover": "#C81E1E",
-            "log_bg": "#0F172A", "log_fg": "#F8FAFC"
+            "log_bg": "#FFFFFF", "log_fg": "#141A26"
         },
         "dark": {
             "bg_root": "#0B0D13", "bg_card": "#12151F", "bg_subcard": "#171B26", "border": "#222839",
@@ -1443,6 +1443,34 @@ class IotaWatchdogApp:
 
         self.txt_log.config(bg=t["log_bg"], fg=t["log_fg"], insertbackground=t["log_fg"], font=("Menlo", self.log_font_size))
 
+        # 动态刷新日志多色标签，确保浅色模式下具有绝佳的可读性与对比度
+        if self.dark_mode:
+            self.txt_log.tag_config("SPEEDTEST", foreground="#38bdf8")
+            self.txt_log.tag_config("REGISTER", foreground="#a78bfa")
+            self.txt_log.tag_config("QUEUE", foreground="#fbbf24")
+            self.txt_log.tag_config("TRAINING", foreground="#4ade80")
+            self.txt_log.tag_config("UPLOAD", foreground="#2dd4bf")
+            self.txt_log.tag_config("EARNINGS", foreground="#facc15")
+            self.txt_log.tag_config("WARN", foreground="#fbbf24")
+            self.txt_log.tag_config("ERROR", foreground="#f87171")
+            self.txt_log.tag_config("WATCHDOG", foreground="#f472b6")
+            self.txt_log.tag_config("CLEANUP", foreground="#fb923c")
+            self.txt_log.tag_config("NORMAL", foreground="#cbd5e1")
+            self.txt_log.tag_config("SEARCH_MATCH", background="#fbbf24", foreground="#000000")
+        else:
+            self.txt_log.tag_config("SPEEDTEST", foreground="#0284c7")
+            self.txt_log.tag_config("REGISTER", foreground="#7c3aed")
+            self.txt_log.tag_config("QUEUE", foreground="#b45309")
+            self.txt_log.tag_config("TRAINING", foreground="#15803d")
+            self.txt_log.tag_config("UPLOAD", foreground="#0f766e")
+            self.txt_log.tag_config("EARNINGS", foreground="#b45309")
+            self.txt_log.tag_config("WARN", foreground="#b45309")
+            self.txt_log.tag_config("ERROR", foreground="#dc2626")
+            self.txt_log.tag_config("WATCHDOG", foreground="#c026d3")
+            self.txt_log.tag_config("CLEANUP", foreground="#c2410c")
+            self.txt_log.tag_config("NORMAL", foreground="#1e293b")
+            self.txt_log.tag_config("SEARCH_MATCH", background="#fde047", foreground="#000000")
+
     def toggle_coldkey_visibility(self):
         self.coldkey_visible = not self.coldkey_visible
         if self.coldkey_visible:
@@ -1688,9 +1716,26 @@ class IotaWatchdogApp:
         self.lbl_watchdog_status.pack(side=tk.LEFT, padx=(6, 0))
         self.widgets["lbl_watchdog_status"] = self.lbl_watchdog_status
 
-        # 右侧操作区：深浅色主题切换 + 界面字号缩放（已移除退出按钮，通过 ⌘Q 或窗口关闭）
+        # 右侧操作区：检查更新 + 深浅色主题切换 + 界面字号缩放
+        self.btn_check_update = ModernButton(
+            top_row,
+            text="🔄 检查更新",
+            command=lambda: threading.Thread(target=lambda: self._check_update_worker(manual=True), daemon=True).start(),
+            bg_color="#4F46E5",
+            fg_color="#ffffff",
+            hover_bg="#4338CA",
+            font=self.font_btn,
+            padx=8,
+            pady=3
+        )
+        self.btn_check_update.pack(side=tk.RIGHT, padx=(6, 0))
+        self.widgets["btn_check_update"] = self.btn_check_update
+
+        self.btn_theme = ModernButton(top_row, text="☀️ 浅色模式", command=self.toggle_theme, font=self.font_btn, padx=8, pady=3)
+        self.btn_theme.pack(side=tk.RIGHT, padx=(6, 6))
+
         ui_font_frame = tk.Frame(top_row)
-        ui_font_frame.pack(side=tk.RIGHT, padx=(8, 0))
+        ui_font_frame.pack(side=tk.RIGHT, padx=(6, 0))
         self.widgets["ui_font_frame"] = ui_font_frame
 
         self.btn_ui_font_inc = ModernButton(ui_font_frame, text="A+", command=lambda: self.change_ui_font_scale(5), font=self.font_btn, padx=6, pady=2)
@@ -1706,9 +1751,6 @@ class IotaWatchdogApp:
         lbl_ui_font_tag = tk.Label(ui_font_frame, text="界面缩放:", font=self.font_body)
         lbl_ui_font_tag.pack(side=tk.RIGHT, padx=(0, 2))
         self.widgets["lbl_ui_font_tag"] = lbl_ui_font_tag
-
-        self.btn_theme = ModernButton(top_row, text="☀️ 浅色模式", command=self.toggle_theme, font=self.font_btn, padx=8, pady=3)
-        self.btn_theme.pack(side=tk.RIGHT, padx=(6, 8))
 
         # 自动更新通知横幅 (默认隐藏)
         banner_update = tk.Frame(main_frame, bd=1, relief="solid", padx=12, pady=6)
@@ -2019,9 +2061,6 @@ class IotaWatchdogApp:
 
         self.btn_save = ModernButton(cfg_frame, text="💾 保存参数", command=self.apply_config, bg_color="#059669", fg_color="#ffffff", hover_bg="#10b981", font=self.font_btn, padx=8, pady=2)
         self.btn_save.pack(side=tk.LEFT)
-
-        self.btn_check_update = ModernButton(cfg_frame, text="🔄 检查更新", command=lambda: threading.Thread(target=lambda: self._check_update_worker(manual=True), daemon=True).start(), bg_color="#4F46E5", fg_color="#ffffff", hover_bg="#4338CA", font=self.font_btn, padx=8, pady=2)
-        self.btn_check_update.pack(side=tk.LEFT, padx=(6, 0))
 
         # 默认收起参数配置面板
         self.card_cfg.pack_forget()

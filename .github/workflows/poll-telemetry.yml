@@ -41,5 +41,10 @@ jobs:
           git config user.name 'telemetry-bot'
           git config user.email 'telemetry-bot@users.noreply.github.com'
           git add data/miners.json
-          git diff --cached --quiet || git commit -m 'telemetry: update miners.json'
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m 'telemetry: update miners.json'
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && exit 0
+            sleep 5
+          done
+          exit 1

@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build config from secrets
         env:
@@ -38,14 +38,14 @@ jobs:
       - name: Commit telemetry data
         run: |
           rm -f scripts/telemetry.config.json
-          cp data/miners.json /tmp/miners.json
+          cp data/telemetry/miners.json /tmp/miners.json
           git config user.name 'telemetry-bot'
           git config user.email 'telemetry-bot@users.noreply.github.com'
           for i in 1 2 3 4 5; do
             git fetch origin main
             git checkout -B main origin/main
-            cp /tmp/miners.json data/miners.json
-            git add data/miners.json
+            cp /tmp/miners.json data/telemetry/miners.json
+            git add data/telemetry/miners.json
             git diff --cached --quiet && exit 0
             git commit -m 'telemetry: update miners.json'
             git push origin main && exit 0

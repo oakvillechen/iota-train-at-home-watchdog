@@ -1,1 +1,105 @@
-{"v":1,"alg":"AES-256-CBC","salt":"f1phxGmVG1w7WFXtDjl2fw==","iv":"rsF/7TBBlxCGobsLyxuVqw==","data":"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"}
+{
+  "v": 1,
+  "generated_at": "2026-10-13T00:51:09.274Z",
+  "settlement_last": "2026-10-13T00:00:00.000Z",
+  "runs": [
+    {
+      "run_id": "4.12.16.16-tah",
+      "tier": "Tier 1 Silver",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 308
+    },
+    {
+      "run_id": "4.12.16.30-tah",
+      "tier": "Tier 1 Silver",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 208
+    },
+    {
+      "run_id": "4.12.16.31-tah",
+      "tier": "Tier 2 Gold",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 29
+    },
+    {
+      "run_id": "4.12.16.32-tah",
+      "tier": "Tier 0 Bronze",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 327
+    },
+    {
+      "run_id": "4.12.16.33-tah",
+      "tier": "Tier 0 Bronze",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 308
+    },
+    {
+      "run_id": "4.12.16.34-tah",
+      "tier": "Tier 0 Bronze",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 268
+    },
+    {
+      "run_id": "4.12.16.35-tah",
+      "tier": "Tier 0 Bronze",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 347
+    },
+    {
+      "run_id": "4.12.16.36-tah",
+      "tier": "Tier 2 Gold",
+      "state": "active",
+      "is_default": true,
+      "num_miners": 21
+    }
+  ],
+  "machines": [
+    {
+      "id": "m3",
+      "label": "M3 Pro",
+      "hotkey_tail": "cJi37C",
+      "status": "stalled",
+      "run_id": "4.12.16.32-tah",
+      "last_run_id": "4.12.16.32-tah",
+      "tier": "Tier 0 Bronze",
+      "tokens": 825600,
+      "series_max": 825600,
+      "frac": 0.0022134143202759047,
+      "rank": 107,
+      "num_miners": 327,
+      "pace_per_hour": 0,
+      "flat_minutes": 190,
+      "today_tokens": 0,
+      "updated_ts": 1791852407
+    },
+    {
+      "id": "m1",
+      "label": "M1 Pro",
+      "hotkey_tail": "Rw3rj6",
+      "status": "producing",
+      "run_id": "4.12.16.32-tah",
+      "last_run_id": "4.12.16.32-tah",
+      "tier": "Tier 0 Bronze",
+      "tokens": 5724800,
+      "series_max": 5724800,
+      "frac": 0.01534805511230075,
+      "rank": 11,
+      "num_miners": 327,
+      "pace_per_hour": 812800,
+      "flat_minutes": 0,
+      "today_tokens": 678400,
+      "updated_ts": 1791852407
+    }
+  ],
+  "network": {
+    "active_runs": 8,
+    "num_miners": 327
+  }
+}

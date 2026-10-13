@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "generated_at": "2026-10-13T00:51:09.274Z",
+  "generated_at": "2026-10-13T00:54:46.052Z",
   "settlement_last": "2026-10-13T00:00:00.000Z",
   "runs": [
     {
@@ -9,27 +9,6 @@
       "state": "active",
       "is_default": false,
       "num_miners": 308
-    },
-    {
-      "run_id": "4.12.16.30-tah",
-      "tier": "Tier 1 Silver",
-      "state": "active",
-      "is_default": false,
-      "num_miners": 208
-    },
-    {
-      "run_id": "4.12.16.31-tah",
-      "tier": "Tier 2 Gold",
-      "state": "active",
-      "is_default": false,
-      "num_miners": 29
-    },
-    {
-      "run_id": "4.12.16.32-tah",
-      "tier": "Tier 0 Bronze",
-      "state": "active",
-      "is_default": false,
-      "num_miners": 327
     },
     {
       "run_id": "4.12.16.33-tah",
@@ -53,6 +32,27 @@
       "num_miners": 347
     },
     {
+      "run_id": "4.12.16.30-tah",
+      "tier": "Tier 1 Silver",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 208
+    },
+    {
+      "run_id": "4.12.16.31-tah",
+      "tier": "Tier 2 Gold",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 29
+    },
+    {
+      "run_id": "4.12.16.32-tah",
+      "tier": "Tier 0 Bronze",
+      "state": "active",
+      "is_default": false,
+      "num_miners": 327
+    },
+    {
       "run_id": "4.12.16.36-tah",
       "tier": "Tier 2 Gold",
       "state": "active",
@@ -71,13 +71,13 @@
       "tier": "Tier 0 Bronze",
       "tokens": 825600,
       "series_max": 825600,
-      "frac": 0.0022134143202759047,
-      "rank": 107,
+      "frac": 0.0021893907892838655,
+      "rank": 109,
       "num_miners": 327,
       "pace_per_hour": 0,
-      "flat_minutes": 190,
+      "flat_minutes": 197,
       "today_tokens": 0,
-      "updated_ts": 1791852407
+      "updated_ts": 1791852834
     },
     {
       "id": "m1",
@@ -87,15 +87,15 @@
       "run_id": "4.12.16.32-tah",
       "last_run_id": "4.12.16.32-tah",
       "tier": "Tier 0 Bronze",
-      "tokens": 5724800,
-      "series_max": 5724800,
-      "frac": 0.01534805511230075,
+      "tokens": 5779200,
+      "series_max": 5779200,
+      "frac": 0.015325735524987059,
       "rank": 11,
       "num_miners": 327,
-      "pace_per_hour": 812800,
+      "pace_per_hour": 793600,
       "flat_minutes": 0,
-      "today_tokens": 678400,
-      "updated_ts": 1791852407
+      "today_tokens": 732800,
+      "updated_ts": 1791852834
     }
   ],
   "network": {

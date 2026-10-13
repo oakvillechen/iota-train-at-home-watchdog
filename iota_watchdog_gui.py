@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.6"
+APP_VERSION = "1.6.7"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -103,6 +103,7 @@ KEY_LOG_KEYWORDS = [
     "epoch", "step", "gradient", "upload", "earning", "reward", "payout",
     "incentive", "balance", "500 - Internal Server Error", "CRITICAL", "ERROR",
     "FORWARD complete", "BACKWARD complete", "Forward pass", "Backward pass",
+    "FORWARD pass", "BACKWARD pass", "Starting FORWARD",
     "Downloaded activation", "Peer status dict has", "Broadcast peer status",
     "all_layers_training", "activation_queue", "select_by_capacity", "report_loss",
     "Failed to send", "Peer unreachable", "unreachable", "dropping",
@@ -604,9 +605,9 @@ class IotaWatchdogApp:
                     if all_matches:
                         self.all_layers_ready = "已就绪 (True)" if all_matches[-1].group(1) == "True" else "未就绪 (False)"
 
-                    # 计算 Forward / Backward 历史
-                    fwd_matches = re.findall(r"FORWARD complete", content)
-                    bwd_matches = re.findall(r"BACKWARD complete", content)
+                    # 计算 Forward / Backward 历史 (兼容新旧 CLI 日志格式与大小写)
+                    fwd_matches = re.findall(r"(?:FORWARD complete|forward pass|starting forward pass)", content, re.IGNORECASE)
+                    bwd_matches = re.findall(r"(?:BACKWARD complete|backward pass)", content, re.IGNORECASE)
                     self.forward_count = len(fwd_matches)
                     self.backward_count = len(bwd_matches)
 
@@ -614,15 +615,24 @@ class IotaWatchdogApp:
                     tail_content = "\n".join(lines)
                     pos_matches = list(re.finditer(r"['\"]position['\"]\s*:\s*([0-9]+)", tail_content))
                     st_matches = list(re.finditer(r"['\"]status['\"]\s*:\s*['\"]([^'\"]+)['\"]", tail_content))
+                    ph_matches = list(re.finditer(r"['\"]phase['\"]\s*:\s*['\"]([^'\"]+)['\"]", tail_content))
 
                     latest_status = st_matches[-1].group(1) if st_matches else None
-                    if pos_matches:
+                    latest_phase = ph_matches[-1].group(1) if ph_matches else None
+                    tail_training_activity = bool(re.search(r"(?:forward pass|starting forward pass|backward pass)", tail_content, re.IGNORECASE))
+
+                    # 优先判定正式训练中（心跳 phase 为 training，或者最近尾部日志有训练/反向计算）
+                    if latest_phase == "training" or tail_training_activity or latest_status in ["training", "running"]:
+                        self.last_status = "training"
+                        self.is_actively_training = True
+                        self.last_queue_position = None
+                        self.prev_queue_position = None
+                        self.queue_start_time = None
+                    elif latest_status == "queued" and pos_matches:
                         unique_positions = [int(m.group(1)) for m in pos_matches]
                         if len(unique_positions) >= 2:
                             self.prev_queue_position = unique_positions[-2]
                         self.last_queue_position = unique_positions[-1]
-
-                    if latest_status == "queued" or (self.last_queue_position is not None and latest_status != "training"):
                         self.last_status = "queued"
                         self.is_actively_training = False
                         self.queue_start_time = time.time()
@@ -638,9 +648,6 @@ class IotaWatchdogApp:
                         self.last_status = "initializing"
                         self.is_actively_training = False
                         self.queue_start_time = time.time()
-                    elif latest_status == "training" or (fwd_matches and not pos_matches):
-                        self.last_status = "training"
-                        self.is_actively_training = True
 
                     # 初始解析 Cache size (P1)
                     cache_matches = list(re.finditer(r"(?:cache size of (\d+)|Cache size:\s*(\d+)/(\d+))", content))
@@ -2345,7 +2352,7 @@ class IotaWatchdogApp:
                     self.queue_start_time = time.time()
                 wait_mins = (time.time() - self.queue_start_time) / 60
 
-                # 实时刷新 UI 看板
+                # 实时刷新 UI 看板与顶栏 KPI
                 def _update_q(w=wait_mins):
                     self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列排队中 ({self.current_layer})", fg="#d97706" if not self.dark_mode else "#fbbf24")
                     self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24")
@@ -2357,6 +2364,7 @@ class IotaWatchdogApp:
                     else:
                         self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8")
                     self.update_p2p_health_ui()
+                    self.update_kpi_cards()
                 self.root.after(0, _update_q)
 
         # 提取活跃邻居数与广播状态
@@ -2455,34 +2463,50 @@ class IotaWatchdogApp:
                             pos_str = f"当前排位: 第 {self.last_queue_position} 位 | " if self.last_queue_position is not None else ""
                             self._insert_text(f"[{datetime.now().strftime('%H:%M:%S')}] ⏳ [排队心跳] {self.current_layer} 排队就绪保持中 ({pos_str}已等待 {mins:.1f} 分钟 | P2P 邻居: {self.active_peers_count})\n", "QUEUE")
                     elif status in ["training", "idle", "running"]:
+                        if phase == "training" or self.forward_count > 0:
+                            self.last_queue_position = None
+                            self.prev_queue_position = None
+                            self.queue_start_time = None
                         if self.last_status == "initializing" or not self.is_actively_training:
                             self.is_actively_training = True
                             self.queue_start_time = None
                             self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] 全网各层已就绪！本机正式进入分布式训练计算 (Epoch: {self.current_epoch}) 🚀🚀🚀\n\n", "TRAINING")
-                        self.last_status = status
+                        self.last_status = "training" if phase == "training" else status
+                        self.root.after(0, self.update_kpi_cards)
                 except Exception:
                     pass
 
-        # 统计 Forward / Backward
-        if "FORWARD complete" in line_clean or "Forward pass" in line_clean:
-            self.forward_count += 1
-            self.orchestrator_status = "正常接收激活中"
-            self.last_activation_time = time.time()
-            if self.current_epoch_num:
-                self.last_activation_epoch = self.current_epoch_num
+        # 统计 Forward / Backward (大小写不敏感匹配新旧 CLI 格式)
+        is_fwd = bool(re.search(r"(?:FORWARD complete|forward pass|starting forward pass)", line_clean, re.IGNORECASE))
+        is_bwd = bool(re.search(r"(?:BACKWARD complete|backward pass)", line_clean, re.IGNORECASE))
+
+        if is_fwd or is_bwd:
+            if is_fwd:
+                self.forward_count += 1
+                self.orchestrator_status = "正常接收激活中"
+                self.last_activation_time = time.time()
+                if self.current_epoch_num:
+                    self.last_activation_epoch = self.current_epoch_num
+            else:
+                self.backward_count += 1
+
+            # 只要产生训练计算，必然已经脱离排队，清理排队位置
+            self.last_queue_position = None
+            self.prev_queue_position = None
+            self.queue_start_time = None
+            self.last_status = "training"
+
             if not self.is_actively_training:
                 self.is_actively_training = True
-                self.queue_start_time = None
-                self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] 收到激活数据并完成 Forward 计算！ 🚀🚀🚀\n\n", "TRAINING")
-            self.root.after(0, lambda: self.lbl_train_stats.config(text=f"训练计算统计: 🔥 正在计算中！(已完成 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"))
-            self.update_orchestrator_cache_ui()
-        elif "BACKWARD complete" in line_clean or "Backward pass" in line_clean:
-            self.backward_count += 1
-            if not self.is_actively_training:
-                self.is_actively_training = True
-                self.queue_start_time = None
-                self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] 完成 Backward 反向传播梯度计算！ 🚀🚀🚀\n\n", "TRAINING")
-            self.root.after(0, lambda: self.lbl_train_stats.config(text=f"训练计算统计: 🔥 正在计算中！(已完成 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"))
+                msg = "收到激活数据并完成 Forward 计算！" if is_fwd else "完成 Backward 反向传播梯度计算！"
+                self._insert_text(f"\n[{datetime.now().strftime('%H:%M:%S')}] 🚀🚀🚀 [正式训练已开启] {msg} 🚀🚀🚀\n\n", "TRAINING")
+
+            self.root.after(0, lambda: [
+                self.lbl_train_stats.config(text=f"训练计算统计: 🔥 正在计算中！(已完成 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                self.lbl_node_phase.config(text=f"当前阶段: 🚀 正式训练中 ({self.current_layer} | {self.current_epoch})", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                self.lbl_init_timer.config(text="排队状态: 🔥 训练已正式开始 (已脱离排队，持续产出算力！)", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                self.update_kpi_cards()
+            ])
             self.update_orchestrator_cache_ui()
 
         tag = "NORMAL"
@@ -2649,7 +2673,7 @@ class IotaWatchdogApp:
             "layer": layer or "--",
             "run_id": run_id or "--",
             "epoch": epoch or "--",
-            "queue_pos": self.last_queue_position or 0,
+            "queue_pos": self.last_queue_position if (status == "queueing" and self.last_queue_position) else 0,
             "upload_speed": getattr(self, "last_upload_speed", "--"),
             "download_speed": getattr(self, "last_download_speed", "--"),
             "speedtest_time": getattr(self, "last_speedtest_time", ""),
@@ -3184,7 +3208,7 @@ class IotaWatchdogApp:
                     self.current_run_id = latest_run_id
                 if latest_phase:
                     self.current_phase = latest_phase
-                if latest_pos is not None:
+                if latest_pos is not None and latest_status == "queued" and latest_phase != "training":
                     if self.last_queue_position is not None and self.last_queue_position != latest_pos:
                         self.prev_queue_position = self.last_queue_position
                     self.last_queue_position = latest_pos
@@ -3192,7 +3216,20 @@ class IotaWatchdogApp:
                 self.update_miner_info_ui()
                 mesh_str = f"P2P 网格: {self.peer_mesh_status}" if self.peer_mesh_status != "检测中..." else f"邻居 {self.active_peers_count}"
 
-                if latest_status == "queued" or (self.last_queue_position is not None and latest_status not in ["training", "running"]):
+                # 优先判定正式训练状态 (协调器 phase 为 training，或者正在产出 Forward/Backward 计算)
+                if latest_phase == "training" or latest_status in ["training", "running"] or self.is_actively_training:
+                    self.last_queue_position = None
+                    self.prev_queue_position = None
+                    self.queue_start_time = None
+                    self.is_actively_training = True
+                    self.last_status = "training"
+                    self.root.after(0, lambda: [
+                        self.lbl_node_phase.config(text=f"当前阶段: 🚀 正式训练中 ({self.current_layer} | {self.current_epoch})", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.lbl_init_timer.config(text="排队状态: 🔥 训练已正式开始 (已脱离排队，持续产出算力！)", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.lbl_train_stats.config(text=f"训练计算统计: 🔥 算力全开计算中！(Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.update_kpi_cards()
+                    ])
+                elif latest_status == "queued" and latest_phase != "training":
                     self.is_actively_training = False
                     self.last_status = "queued"
                     if self.queue_start_time is None:
@@ -3204,7 +3241,8 @@ class IotaWatchdogApp:
                         self.lbl_train_stats.config(
                             text=f"训练计算统计: ⏳ 待机排队中 (累计历史 Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次，等待入队就绪)" if self.forward_count > 0 else "训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)",
                             fg="#64748b" if not self.dark_mode else "#94a3b8"
-                        )
+                        ),
+                        self.update_kpi_cards()
                     ])
                 elif latest_status == "initializing":
                     self.is_actively_training = False
@@ -3215,19 +3253,14 @@ class IotaWatchdogApp:
                     self.root.after(0, lambda m=mesh_str, w=wait_mins: [
                         self.lbl_node_phase.config(text=f"当前阶段: 🟡 队列握手中 ({self.current_layer} | {m})", fg="#d97706" if not self.dark_mode else "#fbbf24"),
                         self.lbl_init_timer.config(text=self.get_queue_status_text(w), fg="#d97706" if not self.dark_mode else "#fbbf24"),
-                        self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8")
-                    ])
-                elif latest_status in ["training", "running"] or self.is_actively_training:
-                    self.queue_start_time = None
-                    self.root.after(0, lambda: [
-                        self.lbl_node_phase.config(text=f"当前阶段: 🚀 正式训练中 ({self.current_layer} | {self.current_epoch})", fg="#15803d" if not self.dark_mode else "#4ade80"),
-                        self.lbl_init_timer.config(text="排队状态: 🔥 训练已正式开始 (已脱离排队，持续产出算力！)", fg="#15803d" if not self.dark_mode else "#4ade80"),
-                        self.lbl_train_stats.config(text=f"训练计算统计: 🔥 算力全开计算中！(Forward: {self.forward_count} 次 | Backward: {self.backward_count} 次)", fg="#15803d" if not self.dark_mode else "#4ade80")
+                        self.lbl_train_stats.config(text="训练计算统计: ⏳ 待机排队中 (等待全网各层握手对齐后自动触发训练)", fg="#64748b" if not self.dark_mode else "#94a3b8"),
+                        self.update_kpi_cards()
                     ])
                 else:
                     self.root.after(0, lambda: [
                         self.lbl_node_phase.config(text=f"当前阶段: 🟢 活跃通信中 ({self.current_layer})", fg="#15803d" if not self.dark_mode else "#4ade80"),
-                        self.lbl_init_timer.config(text="排队状态: 🟢 通信正常保持中", fg="#15803d" if not self.dark_mode else "#4ade80")
+                        self.lbl_init_timer.config(text="排队状态: 🟢 通信正常保持中", fg="#15803d" if not self.dark_mode else "#4ade80"),
+                        self.update_kpi_cards()
                     ])
 
             except Exception:

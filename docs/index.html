@@ -489,6 +489,7 @@
 
     let minersData = [];
     let lastTeleTokensW = null; // 遥测包 today_tokens 汇总(万), 覆盖 6H 口径
+    let lastTeleByTail = {}; // hotkey尾6位 -> today_tokens(原始数), 供卡片统一口径
     let currentFilter = 'all';
     let countdownSec = 30;
     let countdownInterval = null;
@@ -985,12 +986,19 @@
           if (!isNaN(downVal)) totalDownSpeed += downVal;
         }
 
+        // 卡片统一口径: 按 hotkey 尾6位匹配遥测 today_tokens(结算后累计)
+        const nodeTail = String(m.miner_hotkey || m.miner_id || '').slice(-6).toLowerCase();
+        const nodeTeleT = nodeTail ? lastTeleByTail[nodeTail] : undefined;
+        const todayW = (nodeTeleT !== undefined && nodeTeleT !== null)
+          ? parseFloat(nodeTeleT) / 10000 : null;
+
         return {
           ...m,
           lastSeenAgo,
           isOffline,
           isStale,
-          statusCategory
+          statusCategory,
+          _todayW: todayW
         };
       });
 
@@ -1169,7 +1177,7 @@
                   <span>HOURLY TOKEN PRODUCTION (近 3~4 小时贡献明细)</span>
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono font-bold text-[12px]">
-                  ${escapeHtml(m.recent_tokens || '--')} 6H SUM
+                  ${m._todayW !== null && m._todayW !== undefined ? m._todayW.toFixed(1) + '万 SINCE 20:00' : escapeHtml(m.recent_tokens || '--') + ' 6H SUM'}
                 </span>
               </div>
               ${renderCleanHourlyBarChart(m.hourly_tokens)}
@@ -1435,13 +1443,19 @@
     $('live-body').classList.remove('hidden');
     $('live-machines').innerHTML = (data.machines || []).map(machineRow).join('');
     // EST. CONTRIBUTIONS 头部: 用各机器 today_tokens(上次20:00结算后累计) 汇总, 单位换算成万
-    var teleW = 0, teleN = 0;
+    // 同时按 hotkey 尾6位建映射, 供集群卡片统一口径
+    var teleW = 0, teleN = 0, teleByTail = {};
     (data.machines || []).forEach(function (m) {
       var t = parseFloat(m.today_tokens);
-      if (!isNaN(t) && t >= 0) { teleW += t / 10000; teleN++; }
+      var tail = String(m.hotkey_tail || '').toLowerCase();
+      if (!isNaN(t) && t >= 0) {
+        teleW += t / 10000; teleN++;
+        if (tail) teleByTail[tail] = t;
+      }
     });
     if (teleN > 0) {
       lastTeleTokensW = teleW;
+      lastTeleByTail = teleByTail;
       $('stat-total-tokens').innerText = teleW > 0 ? teleW.toFixed(1) + 'W' : '--';
       var sLast = data.settlement_last ? new Date(data.settlement_last) : null;
       if (sLast && !isNaN(sLast)) {

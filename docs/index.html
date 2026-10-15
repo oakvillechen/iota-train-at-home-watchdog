@@ -252,18 +252,18 @@
         </div>
       </div>
 
-      <!-- 指标 2: 6小时总贡献 (关键数字 30px) -->
+      <!-- 指标 2: 上次结算(20:00)后累计贡献 (关键数字 30px) -->
       <div class="ui-card p-5 flex flex-col justify-between">
         <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
           <span>EST. CONTRIBUTIONS</span>
-          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold">6H TOTAL</span>
+          <span id="stat-tokens-pill" class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold">SINCE 20:00</span>
         </div>
         <div class="mt-3 flex items-baseline gap-2">
           <span id="stat-total-tokens" class="text-[30px] font-bold text-[var(--indigo)] tracking-tight font-mono leading-none">--</span>
           <span class="text-[14px] text-[var(--ink-2)] font-mono">TOKENS</span>
         </div>
         <div class="mt-4 text-[13px] text-[var(--ink-2)] truncate">
-          全集群聚合有效训练产出
+          上次 20:00 结算后累计有效产出
         </div>
       </div>
 
@@ -488,6 +488,7 @@
     };
 
     let minersData = [];
+    let lastTeleTokensW = null; // 遥测包 today_tokens 汇总(万), 覆盖 6H 口径
     let currentFilter = 'all';
     let countdownSec = 30;
     let countdownInterval = null;
@@ -1002,7 +1003,9 @@
       document.getElementById("stat-nodes-bar").style.width = `${pct}%`;
       document.getElementById("stat-nodes-pct").innerText = `${pct}%`;
 
-      document.getElementById("stat-total-tokens").innerText = totalTokensNum > 0 ? `${totalTokensNum.toFixed(1)}W` : "--";
+      // EST. CONTRIBUTIONS: 优先用遥测包 today_tokens(上次20:00结算后), 回退到节点 6H 口径
+      const headerTokensW = lastTeleTokensW !== null ? lastTeleTokensW : totalTokensNum;
+      document.getElementById("stat-total-tokens").innerText = headerTokensW > 0 ? `${headerTokensW.toFixed(1)}W` : "--";
       document.getElementById("stat-avg-up").innerText = speedCount > 0 ? `${(totalUpSpeed / speedCount).toFixed(1)}M` : "--";
       document.getElementById("stat-avg-down").innerText = speedCount > 0 ? `${(totalDownSpeed / speedCount).toFixed(1)}M` : "--";
 
@@ -1431,6 +1434,21 @@
     $('live-locked').classList.add('hidden');
     $('live-body').classList.remove('hidden');
     $('live-machines').innerHTML = (data.machines || []).map(machineRow).join('');
+    // EST. CONTRIBUTIONS 头部: 用各机器 today_tokens(上次20:00结算后累计) 汇总, 单位换算成万
+    var teleW = 0, teleN = 0;
+    (data.machines || []).forEach(function (m) {
+      var t = parseFloat(m.today_tokens);
+      if (!isNaN(t) && t >= 0) { teleW += t / 10000; teleN++; }
+    });
+    if (teleN > 0) {
+      lastTeleTokensW = teleW;
+      $('stat-total-tokens').innerText = teleW > 0 ? teleW.toFixed(1) + 'W' : '--';
+      var sLast = data.settlement_last ? new Date(data.settlement_last) : null;
+      if (sLast && !isNaN(sLast)) {
+        var mmdd = sLast.toLocaleDateString('en-CA', { timeZone: 'America/Toronto', month: '2-digit', day: '2-digit' });
+        $('stat-tokens-pill').innerText = 'SINCE ' + mmdd + ' 20:00';
+      }
+    }
     var hereByRun = {};
     (data.machines || []).forEach(function (m) {
       if (m.run_id) { (hereByRun[m.run_id] = hereByRun[m.run_id] || []).push({ label: m.label, stalled: m.status === 'stalled' }); }

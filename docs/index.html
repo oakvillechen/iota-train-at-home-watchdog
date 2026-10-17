@@ -915,6 +915,12 @@
       }
 
       minersData = dedupedNodes;
+      // 卡片顺序固定: 按 hotkey 字母序 (M3 5FHELSbd… 左, M1 5Gq9WWo2… 右), 不再随 updated_at 互换
+      minersData.sort((a, b) => {
+        const ka = String(a.miner_hotkey || a.miner_id || a.worker_name || '').toLowerCase();
+        const kb = String(b.miner_hotkey || b.miner_id || b.worker_name || '').toLowerCase();
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
       renderCluster();
     }
 
@@ -1441,7 +1447,12 @@
     $('live-loading').classList.add('hidden');
     $('live-locked').classList.add('hidden');
     $('live-body').classList.remove('hidden');
-    $('live-machines').innerHTML = (data.machines || []).map(machineRow).join('');
+    $('live-machines').innerHTML = (data.machines || []).slice().sort(function (a, b) {
+      // 卡片顺序固定: M3 左 M1 右, 与下方集群卡片一致 (按 id: m3 < m1)
+      var ka = String(a.id || a.label || ''), kb = String(b.id || b.label || '');
+      var pa = ka === 'm3' ? 0 : ka === 'm1' ? 1 : 2, pb = kb === 'm3' ? 0 : kb === 'm1' ? 1 : 2;
+      return pa - pb;
+    }).map(machineRow).join('');
     // EST. CONTRIBUTIONS 头部: 用各机器 today_tokens(上次20:00结算后累计) 汇总, 单位换算成万
     // 同时按 hotkey 尾6位建映射, 供集群卡片统一口径
     var teleW = 0, teleN = 0, teleByTail = {};

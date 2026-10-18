@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.8"
+APP_VERSION = "1.6.9"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -962,25 +962,43 @@ class IotaWatchdogApp:
             cand_runs = []
             if self.current_run_id and "检测中" not in self.current_run_id:
                 cand_runs.append(self.current_run_id)
-            # 扫描最近的 cli 日志以发现所有近期运行的 Run ID
-            cli_logs = glob.glob(os.path.join(LOG_DIR, "*[0-9]-cli.log"))
+
+            # 1. 动态从官方 API 获取当前全网活跃 Runs 列表 (确保不遗漏跨版本 Run)
+            try:
+                all_runs_data = _get_json(f"{base}/runs")
+                for r_item in all_runs_data.get("runs", []):
+                    r_name = r_item.get("run_name") or r_item.get("name")
+                    if r_name and r_name not in cand_runs:
+                        cand_runs.append(r_name)
+            except Exception:
+                pass
+
+            # 2. 扫描最近的 cli 日志以发现所有近期运行的 Run ID (通用正则，兼容所有新老版本)
+            run_pattern = re.compile(r'\b(?:\d+\.){2,4}\d+-tah\b|run[-_](\d+(?:_\d+){2,4}-tah)\b')
+            cli_logs = glob.glob(os.path.join(LOG_DIR, "*cli*.log"))
             cli_logs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
             for lf_path in cli_logs[:5]:
                 try:
                     with open(lf_path, "r", errors="ignore") as lf:
                         for l in lf:
-                            for rm in re.finditer(r"4\.12\.16\.\d+-tah", l):
-                                r_cand = rm.group(0)
+                            for rm in run_pattern.finditer(l):
+                                r_cand = (rm.group(0) if not rm.group(1) else rm.group(1).replace("_", ".")).replace("run-", "").replace("_", ".")
                                 if r_cand not in cand_runs:
                                     cand_runs.append(r_cand)
                 except Exception:
                     pass
-            for fb in ["4.12.16.20-tah", "4.12.16.24-tah", "4.12.16.14-tah"]:
-                if fb not in cand_runs:
-                    cand_runs.append(fb)
+
+            if not cand_runs:
+                cand_runs = ["4.13.7.6-tah", "4.13.7.8-tah", "4.12.16.20-tah"]
+
+            # 若主窗口当前 Run ID 仍为检测中，用检测到的最新 Run 填充
+            if (not self.current_run_id or "检测中" in self.current_run_id) and cand_runs:
+                self.current_run_id = cand_runs[0]
+                if hasattr(self, "lbl_run_id"):
+                    self.lbl_run_id.config(text=f"Run: {self.current_run_id}")
 
             # 查询矿工在主 Run 下的官方排名 (P0 功能 2)
-            primary_run_clean = cand_runs[0].replace("run-", "").replace("_", ".")
+            primary_run_clean = cand_runs[0].replace("run-", "").replace("_", ".") if cand_runs else ""
             try:
                 rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank")
                 self.chain_rank = rank_res.get("rank")
@@ -1001,7 +1019,7 @@ class IotaWatchdogApp:
                     return r_name, []
 
             from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=min(4, len(cand_runs))) as ex:
+            with ThreadPoolExecutor(max_workers=min(8, max(1, len(cand_runs)))) as ex:
                 run_pts_map = dict(ex.map(_fetch_run_pts, cand_runs))
 
             sorted_run_pts = {}
@@ -2665,12 +2683,13 @@ class IotaWatchdogApp:
         run_id = getattr(self, "current_run_id", "")
         if not run_id or "检测" in run_id:
             try:
-                for lf in sorted(glob.glob(os.path.join(LOG_DIR, "*cli.log")), reverse=True):
+                run_pattern = re.compile(r'\b(?:\d+\.){2,4}\d+-tah\b|run[-_](\d+(?:_\d+){2,4}-tah)\b')
+                for lf in sorted(glob.glob(os.path.join(LOG_DIR, "*cli*.log")), reverse=True):
                     with open(lf, "r", errors="ignore") as f:
                         for l in f:
-                            m_r = re.search(r"4\.12\.16\.\d+-tah", l)
+                            m_r = run_pattern.search(l)
                             if m_r:
-                                run_id = m_r.group(0)
+                                run_id = (m_r.group(0) if not m_r.group(1) else m_r.group(1).replace("_", ".")).replace("run-", "").replace("_", ".")
                                 break
                     if run_id: break
             except Exception:

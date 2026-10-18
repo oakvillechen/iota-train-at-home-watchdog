@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.7"
+APP_VERSION = "1.6.8"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -1084,22 +1084,33 @@ class IotaWatchdogApp:
                         tot += (v1 - v0)
                 return tot
 
-            # 1. 最近 6 小时贡献（每小时明细 + 合计）
+            # 确定前一次结算时间戳（优先从官方 next_payout_ts 推导 24h 前，或取 20:00 结算锚点）
+            anchor_date = now.date() if now.hour >= 20 else now.date() - timedelta(days=1)
+            anchor_20pm = datetime(anchor_date.year, anchor_date.month, anchor_date.day, 20, 0, 0)
+            last_settle_dt = anchor_20pm
+            if getattr(self, "next_payout_ts", None) and self.next_payout_ts > now.timestamp():
+                cand_settle = datetime.fromtimestamp(self.next_payout_ts - 86400)
+                if abs((cand_settle - anchor_20pm).total_seconds()) <= 7200:
+                    last_settle_dt = cand_settle
+
+            # 1. 有效 Token 贡献：严格从前一次结算算起（当前周期累计贡献）
+            cur_window_delta = get_range_tokens(last_settle_dt, now)
+            self.cur_cycle_tokens_str = f"{cur_window_delta/10000:.2f}万"
+            self.last_6h_total_str = self.cur_cycle_tokens_str
+
+            # 分段计算从前一次结算到当前各小时的明细
             cur_hour_start = datetime(now.year, now.month, now.day, now.hour, 0, 0)
-            hourly_items = []
-            sum_6h = 0.0
-            for h_offset in range(6, 0, -1):
-                h_start = cur_hour_start - timedelta(hours=h_offset)
-                h_end = h_start + timedelta(hours=1)
-                h_delta = get_range_tokens(h_start, h_end)
-                sum_6h += h_delta
-                hourly_items.append((h_start.strftime("%H:00"), h_end.strftime("%H:00"), h_delta))
-
             cur_delta = get_range_tokens(cur_hour_start, now)
-            tot_with_current = sum_6h + cur_delta
-            self.last_6h_total_str = f"{tot_with_current/10000:.2f}万"
+            cycle_hourly = []
+            h_cursor = cur_hour_start
+            while h_cursor > last_settle_dt:
+                h_start = max(last_settle_dt, h_cursor - timedelta(hours=1))
+                h_end = h_cursor
+                h_delta = get_range_tokens(h_start, h_end)
+                cycle_hourly.append((h_start, h_end, h_delta))
+                h_cursor = h_start
 
-            # 结构化存储最近各小时贡献 (当前进行中小时 + 最近 3 个完整整小时)
+            # 结构化存储最近各小时贡献 (供云端仪表盘柱状图使用)
             recent_hourly = []
             recent_hourly.append({
                 "range": f"{cur_hour_start.strftime('%H:00')}~{now.strftime('%H:%M')}",
@@ -1107,39 +1118,43 @@ class IotaWatchdogApp:
                 "tokens_num": round(cur_delta / 10000.0, 2),
                 "is_current": True
             })
-            for s, e, delta in reversed(hourly_items[-3:]):
+            for s_dt, e_dt, delta in cycle_hourly[:5]:
                 recent_hourly.append({
-                    "range": f"{s}~{e}",
+                    "range": f"{s_dt.strftime('%H:00')}~{e_dt.strftime('%H:00')}",
                     "tokens": f"{delta/10000:.2f}万",
                     "tokens_num": round(delta / 10000.0, 2),
                     "is_current": False
                 })
             self.recent_hourly_tokens = recent_hourly
 
-            # 有效 Token 贡献统计（按时间降序排列：最新小时在最上方）
+            # 有效 Token 贡献统计（从前一次结算算起，按时间降序排列）
             s_cur = cur_hour_start.strftime("%H:00")
             e_cur = now.strftime("%H:%M")
-            token_lines.append(f"【⏱ 最近 6 小时有效贡献 (合计: {tot_with_current/10000:.2f}万 | 按时间降序)】")
+            token_lines.append(f"【⏱ 自前次结算有效贡献 (合计: {cur_window_delta/10000:.2f}万 | 进行中)】")
             token_lines.append(f"● {s_cur} ~ {e_cur} (进行中): {cur_delta/10000:6.2f} 万 Tokens")
-            for s, e, delta in reversed(hourly_items):
-                token_lines.append(f"● {s} ~ {e}: {delta/10000:6.2f} 万 Tokens")
+
+            # 显示最近几个整点小时
+            max_show = 5
+            for s_dt, e_dt, delta in cycle_hourly[:max_show]:
+                token_lines.append(f"● {s_dt.strftime('%H:00')} ~ {e_dt.strftime('%H:00')}: {delta/10000:6.2f} 万 Tokens")
+
+            # 若周期内更早时间段有产出，聚合显示此前累计产出
+            if len(cycle_hourly) > max_show:
+                earlier_delta = sum(hd for _, _, hd in cycle_hourly[max_show:])
+                earlier_start = cycle_hourly[-1][0]
+                earlier_end = cycle_hourly[max_show][0]
+                token_lines.append(f"● {earlier_start.strftime('%m-%d %H:%M')} ~ {earlier_end.strftime('%H:%M')} (此前累计): {earlier_delta/10000:6.2f} 万 Tokens")
 
             token_lines.append("")
             # 2. 最近 3 天结算周期对比（以官方 20:00 EDT / UTC 00:00 结算为周期锚点，按日期降序）
             token_lines.append("【📅 结算周期对比 (20:00 锚点，按日期降序)】")
-            anchor_date = now.date() if now.hour >= 20 else now.date() - timedelta(days=1)
-            anchor_20pm = datetime(anchor_date.year, anchor_date.month, anchor_date.day, 20, 0, 0)
 
-            cur_window_delta = 0.0
             price = getattr(self, "sn9_usd_price", getattr(self, "tao_usd_price", 0.0))
             for cycle_idx in range(3):
                 c_start = anchor_20pm - timedelta(days=cycle_idx)
                 c_end = c_start + timedelta(days=1)
                 q_end = min(c_end, now)
-                c_delta = get_range_tokens(c_start, q_end)
-                if cycle_idx == 0:
-                    cur_window_delta = c_delta
-                    self.cur_cycle_tokens_str = f"{cur_window_delta/10000:.2f}万"
+                c_delta = cur_window_delta if cycle_idx == 0 else get_range_tokens(c_start, q_end)
                 t_wan = c_delta / 10000.0
 
                 s_str = c_start.strftime("%m-%d 20:00")
@@ -2616,7 +2631,7 @@ class IotaWatchdogApp:
             if m:
                 peers_num = int(m.group(1))
 
-        recent_tokens = getattr(self, "last_6h_total_str", "") or "--"
+        recent_tokens = getattr(self, "cur_cycle_tokens_str", "") or getattr(self, "last_6h_total_str", "") or "--"
         cycle_tokens = getattr(self, "cur_cycle_tokens_str", "") or "--"
 
         last_log = getattr(self, "last_log_line", "").strip()

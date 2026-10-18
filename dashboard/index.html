@@ -252,18 +252,18 @@
         </div>
       </div>
 
-      <!-- 指标 2: 6小时总贡献 (关键数字 30px) -->
+      <!-- 指标 2: 本周期总贡献 (自前次结算算起) -->
       <div class="ui-card p-5 flex flex-col justify-between">
         <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] flex items-center justify-between">
-          <span>EST. CONTRIBUTIONS</span>
-          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold">6H TOTAL</span>
+          <span>CYCLE CONTRIBUTIONS</span>
+          <span class="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-semibold">自前次结算</span>
         </div>
         <div class="mt-3 flex items-baseline gap-2">
           <span id="stat-total-tokens" class="text-[30px] font-bold text-[var(--indigo)] tracking-tight font-mono leading-none">--</span>
           <span class="text-[14px] text-[var(--ink-2)] font-mono">TOKENS</span>
         </div>
         <div class="mt-4 text-[13px] text-[var(--ink-2)] truncate">
-          全集群聚合有效训练产出
+          全集群自前次结算有效产出
         </div>
       </div>
 
@@ -938,8 +938,9 @@
           onlineCount++;
         }
 
-        if (m.recent_tokens) {
-          const tVal = parseFloat(m.recent_tokens);
+        const tokenStr = (m.cycle_tokens && m.cycle_tokens !== '--') ? m.cycle_tokens : m.recent_tokens;
+        if (tokenStr) {
+          const tVal = parseFloat(tokenStr);
           if (!isNaN(tVal)) totalTokensNum += tVal;
         }
 
@@ -1134,10 +1135,10 @@
               <div class="text-[12px] font-medium uppercase tracking-wider text-[var(--ink-3)] mb-3 flex items-center justify-between">
                 <span class="flex items-center gap-2 text-[var(--ink)] font-semibold">
                   <span class="w-2 h-2 rounded-full bg-[var(--indigo)]"></span>
-                  <span>HOURLY TOKEN PRODUCTION (近 3~4 小时贡献明细)</span>
+                  <span>HOURLY TOKEN PRODUCTION (小时贡献明细)</span>
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono font-bold text-[12px]">
-                  ${escapeHtml(m.recent_tokens || '--')} 6H SUM
+                  ${escapeHtml((m.cycle_tokens && m.cycle_tokens !== '--') ? m.cycle_tokens : (m.recent_tokens || '--'))} 自前次结算
                 </span>
               </div>
               ${renderCleanHourlyBarChart(m.hourly_tokens)}

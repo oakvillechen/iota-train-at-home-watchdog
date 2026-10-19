@@ -352,31 +352,27 @@
     </div>
 
 
-    <!-- ================= LIVE 实时遥测 (官方 API) ================= -->
+    <!-- ================= RUN 总览 (官方 API 矿工数) ================= -->
     <div id="live-telemetry" class="mb-4 p-4 rounded-2xl bg-[var(--card)] border border-[var(--border)] shadow-sm">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div class="flex items-center gap-2.5">
           <span class="w-2.5 h-2.5 rounded-full bg-[var(--green)] animate-pulse" id="live-dot"></span>
-          <span class="font-bold text-[15px] text-[var(--ink)]">LIVE 实时遥测</span>
+          <span class="font-bold text-[15px] text-[var(--ink)]">RUN 总览</span>
           <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono">OFFICIAL API</span>
-          <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--green)]/15 text-[var(--green)] font-mono">AES-256</span>
         </div>
         <div class="flex items-center gap-4 font-mono text-[12px] text-[var(--ink-2)]">
           <span>距结算 <span id="live-countdown" class="text-[var(--ink)] font-semibold">--:--:--</span></span>
           <span>数据 <span id="live-updated" class="text-[var(--ink)]">—</span></span>
-          <span>刷新 15s</span>
         </div>
       </div>
 
-      <div id="live-locked" class="hidden py-1.5 text-[12px] text-[var(--ink-2)]">🔐 实时遥测已加密 — 用页面上方的密码解锁后，这里显示两台矿机的状态。</div>
-      <div id="live-loading" class="py-1.5 text-[12px] text-[var(--ink-3)] font-mono">正在拉取实时遥测…</div>
+      <div id="live-locked" class="hidden py-1.5 text-[12px] text-[var(--ink-2)]">🔐 数据已加密 — 用页面上方的密码解锁后显示。</div>
+      <div id="live-loading" class="py-1.5 text-[12px] text-[var(--ink-3)] font-mono">正在拉取 RUN 数据…</div>
 
       <div id="live-body" class="hidden">
-        <div class="text-[10px] font-semibold tracking-wide text-[var(--ink-3)] mb-1">我的矿机</div>
-        <div id="live-machines" class="mb-3 rounded-xl border border-[var(--border)] bg-[var(--card-sub)] divide-y divide-[var(--border)]"></div>
         <div class="text-[10px] font-semibold tracking-wide text-[var(--ink-3)] mb-1.5">全部 RUN · 每个 RUN 的矿工数</div>
         <div id="live-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3"></div>
-        <div class="mt-2 text-[11px] text-[var(--ink-3)] font-mono">来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新，页面每 15 秒刷新 · 两台机器的详情见下方节点卡</div>
+        <div class="mt-2 text-[11px] text-[var(--ink-3)] font-mono">来源：Macrocosmos 官方 API · Actions 约每 5 分钟更新 · 两台机器的详情见下方节点卡</div>
       </div>
     </div>
 
@@ -1448,12 +1444,7 @@
     $('live-loading').classList.add('hidden');
     $('live-locked').classList.add('hidden');
     $('live-body').classList.remove('hidden');
-    $('live-machines').innerHTML = (data.machines || []).slice().sort(function (a, b) {
-      // 卡片顺序固定: M3 左 M1 右, 与下方集群卡片一致 (按 id: m3 < m1)
-      var ka = String(a.id || a.label || ''), kb = String(b.id || b.label || '');
-      var pa = ka === 'm3' ? 0 : ka === 'm1' ? 1 : 2, pb = kb === 'm3' ? 0 : kb === 'm1' ? 1 : 2;
-      return pa - pb;
-    }).map(machineRow).join('');
+    // (机器行已移除: 只保留 RUN 矿工数卡片)
     // EST. CONTRIBUTIONS 头部: 用各机器 today_tokens(上次20:00结算后累计) 汇总, 单位换算成万
     // 同时按 hotkey 尾6位建映射, 供集群卡片统一口径
     var teleW = 0, teleN = 0, teleByTail = {};

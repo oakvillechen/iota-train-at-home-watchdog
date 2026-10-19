@@ -1018,8 +1018,8 @@
       document.getElementById("stat-nodes-bar").style.width = `${pct}%`;
       document.getElementById("stat-nodes-pct").innerText = `${pct}%`;
 
-      // EST. CONTRIBUTIONS: 优先用遥测包 today_tokens(上次20:00结算后), 回退到节点 6H 口径
-      const headerTokensW = lastTeleTokensW !== null ? lastTeleTokensW : totalTokensNum;
+      // CYCLE CONTRIBUTIONS: 统一用 Mac 客户端 cycle_tokens 汇总 (用户要求, 不用遥测包)
+      const headerTokensW = totalTokensNum;
       document.getElementById("stat-total-tokens").innerText = headerTokensW > 0 ? `${headerTokensW.toFixed(1)}W` : "--";
       document.getElementById("stat-avg-up").innerText = speedCount > 0 ? `${(totalUpSpeed / speedCount).toFixed(1)}M` : "--";
       document.getElementById("stat-avg-down").innerText = speedCount > 0 ? `${(totalDownSpeed / speedCount).toFixed(1)}M` : "--";
@@ -1468,7 +1468,7 @@
     if (teleN > 0) {
       lastTeleTokensW = teleW;
       lastTeleByTail = teleByTail;
-      $('stat-total-tokens').innerText = teleW > 0 ? teleW.toFixed(1) + 'W' : '--';
+      // header 改用 Mac 客户端数据, 这里不再覆盖 stat-total-tokens
       var sLast = data.settlement_last ? new Date(data.settlement_last) : null;
       if (sLast && !isNaN(sLast)) {
         var mmdd = sLast.toLocaleDateString('en-CA', { timeZone: 'America/Toronto', month: '2-digit', day: '2-digit' });

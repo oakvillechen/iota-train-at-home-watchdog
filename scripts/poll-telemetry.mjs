@@ -222,8 +222,8 @@ if (process.env.PLAINTEXT === '1') {
   writeFileSync(outPath, JSON.stringify(out, null, 2));
   console.log('Wrote PLAINTEXT (testing only):', outPath);
 } else {
-  const unlockKey = cfg.unlock || null;
-  if (!unlockKey) { console.error('unlock key missing: create telemetry.config.json (see README section in workflow).'); process.exit(1); }
+  const unlockKey = cfg.unlock || process.env.TELEMETRY_PASSWORD || null;
+  if (!unlockKey) { console.error('unlock key missing: specify TELEMETRY_PASSWORD env or create telemetry.config.json.'); process.exit(1); }
   const salt = randomBytes(16);
   const iv = randomBytes(16);
   const key = pbkdf2Sync(Buffer.from(unlockKey, 'utf8'), salt, 100000, 32, 'sha256');

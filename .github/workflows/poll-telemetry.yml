@@ -3,6 +3,8 @@ name: Poll Miner Telemetry
 on:
   schedule:
     - cron: '*/5 * * * *'
+  repository_dispatch:
+    types: [poll-telemetry]
   workflow_dispatch:
 
 permissions:

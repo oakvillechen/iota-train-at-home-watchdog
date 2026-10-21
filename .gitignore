@@ -15,3 +15,6 @@ credentials.json
 secrets.json
 watchdog_config.json
 .github_token
+.*_hotkey
+*.hotkey
+*telemetry.config.json

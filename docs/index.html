@@ -360,9 +360,17 @@
           <span class="font-bold text-[15px] text-[var(--ink)]">RUN 总览</span>
           <span class="text-[11px] px-2 py-0.5 rounded-full bg-[var(--indigo-soft)] text-[var(--indigo)] font-mono">OFFICIAL API</span>
         </div>
-        <div class="flex items-center gap-4 font-mono text-[12px] text-[var(--ink-2)]">
+        <div class="flex items-center gap-3 font-mono text-[12px] text-[var(--ink-2)] flex-wrap">
+          <span>全网矿机 <span id="live-total-miners" class="text-[var(--indigo)] font-bold">--</span> 台</span>
+          <span class="text-[var(--border)]">•</span>
+          <span>活跃 RUN <span id="live-total-runs" class="text-[var(--ink)] font-semibold">--</span> 个</span>
+          <span class="text-[var(--border)]">•</span>
           <span>距结算 <span id="live-countdown" class="text-[var(--ink)] font-semibold">--:--:--</span></span>
+          <span class="text-[var(--border)]">•</span>
           <span>数据 <span id="live-updated" class="text-[var(--ink)]">—</span></span>
+          <button onclick="if(typeof refreshAllData==='function')refreshAllData();" class="px-2 py-0.5 rounded-md bg-[var(--card-sub)] border border-[var(--border)] hover:border-[var(--indigo)] text-[var(--ink)] hover:text-[var(--indigo)] transition text-[11px] font-semibold flex items-center gap-1 cursor-pointer" title="手动立即拉取最新数据">
+            <span>🔄 刷新</span>
+          </button>
         </div>
       </div>
 
@@ -779,11 +787,28 @@
       const cfgPwd = document.getElementById("cfg-password");
       if (cfgPwd) cfgPwd.value = pwd;
       fetchClusterData();
+      if (typeof window.loadLive === 'function') window.loadLive();
     }
+
+    function refreshAllData() {
+      fetchClusterData();
+      if (typeof window.loadLive === 'function') window.loadLive();
+    }
+    window.refreshAllData = refreshAllData;
 
     // ================= 数据拉取 =================
     async function fetchClusterData() {
       if (isMockMode) {
+        if (!window.lastTelemetryData) {
+          window.lastTelemetryData = {
+            runs: [
+              { run_id: "4.12.16.20-tah", num_miners: 186, tier: "Tier 1 Silver", state: "active" }
+            ],
+            machines: [
+              { id: "m1", label: "DreamHomeGTAM1", run_id: "4.12.16.20-tah", rank: 24, num_miners: 186, status: "producing" }
+            ]
+          };
+        }
         minersData = DEMO_MINERS.map(m => ({
           ...m,
           updated_at: Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 30)
@@ -857,10 +882,38 @@
         console.warn("API 获取失败:", err);
       }
 
-      // 端到端 AES-256 解密处理
-      const pwd = (appConfig.password || "iota2026").trim();
-      const decryptPromises = nodes.map(n => decryptNodeData(n, pwd));
-      const decryptedNodes = await Promise.all(decryptPromises);
+      // 本地服务优先尝试 (针对本地 HTTP Server 预览)
+      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+      if (isLocalHost && nodes.length === 0) {
+        try {
+          const mRes = await fetch('../data/cluster_manifest.json?_t=' + Date.now()).catch(() => fetch('/data/cluster_manifest.json?_t=' + Date.now()));
+          if (mRes && mRes.ok) {
+            const mData = await mRes.json();
+            const nodeIds = mData.nodes || [];
+            const rawPromises = nodeIds.map(async nid => {
+              const nr = await fetch(`../data/${nid}.json?_t=${Date.now()}`).catch(() => fetch(`/data/${nid}.json?_t=${Date.now()}`));
+              return (nr && nr.ok) ? await nr.json() : null;
+            });
+            const rawResults = await Promise.all(rawPromises);
+            nodes = rawResults.filter(Boolean);
+          }
+        } catch (localErr) {
+          console.warn("Local manifest fallback:", localErr);
+        }
+      }
+
+      // 端到端 AES-256 解密处理 (优先配置密码，其次回退 iota2026)
+      let pwd = (appConfig.password || "iota2026").trim();
+      let decryptPromises = nodes.map(n => decryptNodeData(n, pwd));
+      let decryptedNodes = await Promise.all(decryptPromises);
+
+      if (decryptedNodes.some(n => n && n.__encrypted) && pwd !== "iota2026") {
+        const altPromises = nodes.map(n => decryptNodeData(n, "iota2026"));
+        const altNodes = await Promise.all(altPromises);
+        if (!altNodes.some(n => n && n.__encrypted)) {
+          decryptedNodes = altNodes;
+        }
+      }
 
       const hasEncryptedLock = decryptedNodes.some(n => n && n.__encrypted);
       const unlockBanner = document.getElementById("encryption-unlock-banner");
@@ -932,6 +985,34 @@
         }
       });
       renderCluster();
+    }
+
+    // 辅助函数：跨表关联 RUN 矿机总数与官方遥测
+    function getRunInfo(runId) {
+      if (!runId || !window.lastTelemetryData || !window.lastTelemetryData.runs) return null;
+      const clean = String(runId).trim().replace(/-tah$/i, '').toLowerCase();
+      return window.lastTelemetryData.runs.find(r => {
+        if (!r || !r.run_id) return false;
+        const rClean = String(r.run_id).trim().replace(/-tah$/i, '').toLowerCase();
+        return rClean === clean;
+      }) || null;
+    }
+
+    function getTelemetryMachine(miner) {
+      if (!miner || !window.lastTelemetryData || !window.lastTelemetryData.machines) return null;
+      const mHotkey = String(miner.miner_hotkey || miner.miner_id || '').toLowerCase();
+      const mName = String(miner.worker_name || '').toLowerCase();
+      const mTail = mHotkey.length >= 6 ? mHotkey.slice(-6) : '';
+
+      return window.lastTelemetryData.machines.find(tm => {
+        if (!tm) return false;
+        const tmTail = String(tm.hotkey_tail || '').toLowerCase();
+        if (mTail && tmTail && mTail === tmTail) return true;
+        const tmLabel = String(tm.label || '').toLowerCase();
+        const tmId = String(tm.id || '').toLowerCase();
+        if (mName.includes(tmId) || (tmLabel && mName.includes(tmLabel))) return true;
+        return false;
+      }) || null;
     }
 
     function renderCluster() {
@@ -1075,6 +1156,10 @@
       const isStale = m.isStale;
       const isQueue = m.statusCategory === 'queue';
 
+      const runInfo = (typeof getRunInfo === 'function') ? getRunInfo(m.run_id) : null;
+      const runMinersCount = runInfo && runInfo.num_miners ? runInfo.num_miners : null;
+      const teleMachine = (typeof getTelemetryMachine === 'function') ? getTelemetryMachine(m) : null;
+
       let statusBadge = "";
       let borderClass = "border-[var(--border)]";
 
@@ -1097,17 +1182,19 @@
           </span>
         `;
       } else if (isQueue) {
+        const queueTotalText = runMinersCount ? ` · 共 ${runMinersCount} 台` : '';
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] text-[12px] font-semibold tracking-wide">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--amber-soft)] text-[var(--amber)] text-[12px] font-semibold tracking-wide shadow-xs border border-[var(--amber)]/25">
             <span class="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse"></span>
-            排队保护中 (#${m.queue_pos})
+            排队中 (#${m.queue_pos}${queueTotalText})
           </span>
         `;
       } else {
+        const runMachineText = runMinersCount ? ` · RUN 共 ${runMinersCount} 台` : '';
         statusBadge = `
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--green-soft)] text-[var(--green)] text-[12px] font-semibold tracking-wide">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--green-soft)] text-[var(--green)] text-[12px] font-semibold tracking-wide shadow-xs border border-[var(--green)]/25">
             <span class="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
-            TRAINING ACTIVE
+            TRAINING ACTIVE${runMachineText}
           </span>
         `;
       }
@@ -1122,6 +1209,54 @@
 
       const fullMinerId = m.miner_id || m.miner_hotkey || (m.worker_id && m.worker_id.startsWith('miner-') ? m.worker_id.replace('miner-', '') : '') || m.worker_id || '--';
       const shortMinerId = fullMinerId.length > 20 ? `${fullMinerId.slice(0, 8)}...${fullMinerId.slice(-6)}` : fullMinerId;
+      const cleanRunId = (m.run_id || '--').replace(/-tah$/i, '');
+
+      // 专门的排队状态/运行状态监控卡片
+      let queueDetailBlock = "";
+      if (isQueue) {
+        const aheadCount = Math.max(0, (m.queue_pos || 1) - 1);
+        const hasRatio = runMinersCount && m.queue_pos <= runMinersCount;
+        const queuePct = hasRatio ? Math.min(100, Math.max(3, (m.queue_pos / runMinersCount) * 100)) : 100;
+        queueDetailBlock = `
+          <div class="mb-4 p-3.5 rounded-2xl bg-[var(--card-sub)] border border-[var(--amber)]/35 shadow-xs">
+            <div class="flex items-center justify-between text-[12px] font-mono mb-2">
+              <span class="font-bold text-[var(--amber)] flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse"></span>
+                <span>当前排位: 第 <strong class="text-[15px] font-bold text-[var(--ink)]">${m.queue_pos}</strong> 位</span>
+              </span>
+              <span class="text-[var(--ink)] text-[12px] font-semibold">
+                该 RUN 机器总数: <strong class="text-[14px] text-[var(--indigo)] font-bold font-mono">${runMinersCount ? runMinersCount + ' 台' : '统计中…'}</strong>
+              </span>
+            </div>
+            <div class="w-full bg-[var(--border)] rounded-full h-2.5 overflow-hidden">
+              <div class="bg-gradient-to-r from-[var(--amber)] to-[var(--indigo)] h-2.5 rounded-full ${hasRatio ? 'transition-all duration-500' : 'animate-pulse'}" style="width: ${hasRatio ? queuePct + '%' : '100%'}"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-[var(--ink-3)] font-mono mt-1.5">
+              <span>#1 队列首位</span>
+              <span class="text-[var(--amber)] font-semibold">前方尚有 ${aheadCount} 台等待调度 · 该 RUN ${runMinersCount || '--'} 台正在算力产出</span>
+              <span>${hasRatio ? '#' + runMinersCount + ' 队尾' : '队列等待中'}</span>
+            </div>
+          </div>
+        `;
+      } else if (!isOff) {
+        const rank = teleMachine && teleMachine.rank ? teleMachine.rank : null;
+        const totalInRun = runMinersCount || (teleMachine ? teleMachine.num_miners : null);
+        const pace = teleMachine && teleMachine.pace_per_hour ? teleMachine.pace_per_hour : null;
+        const frac = teleMachine && teleMachine.frac ? teleMachine.frac : null;
+        if (totalInRun || rank) {
+          queueDetailBlock = `
+            <div class="mb-4 p-3 rounded-2xl bg-[var(--card-sub)] border border-[var(--green)]/30 flex flex-wrap items-center justify-between gap-2 text-[12px] font-mono shadow-xs">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
+                <span class="text-[var(--ink)] font-bold">该 RUN 共 ${totalInRun || '--'} 台机器</span>
+                ${rank ? `<span class="px-2 py-0.5 rounded-full bg-[var(--green-soft)] text-[var(--green)] font-bold">官方算力排名 #${rank} / ${totalInRun || '--'}</span>` : ''}
+              </div>
+              ${frac ? `<span class="text-[var(--ink-2)]">算力占比 <strong>${(frac * 100).toFixed(3)}%</strong></span>` : ''}
+              ${pace ? `<span class="text-[var(--indigo)] font-semibold">⚡ ${Number(pace).toLocaleString()} tokens/h</span>` : ''}
+            </div>
+          `;
+        }
+      }
 
       return `
         <div class="ui-card ${borderClass} p-6 flex flex-col justify-between">
@@ -1150,9 +1285,12 @@
 
             <!-- 核心训练参数 Chips (RUN / LAYER / EPOCH) -->
             <div class="grid grid-cols-3 gap-2.5 mb-4 font-mono text-[12px]">
-              <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col">
-                <span class="text-[11px] font-medium text-[var(--ink-3)] uppercase">RUN ID</span>
-                <span class="font-semibold text-[var(--ink)] truncate mt-0.5">${escapeHtml(m.run_id || '--')}</span>
+              <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col justify-between">
+                <div class="flex items-center justify-between text-[11px] font-medium text-[var(--ink-3)] uppercase">
+                  <span>RUN ID</span>
+                  ${runMinersCount ? `<span class="text-[var(--indigo)] font-bold font-mono">共 ${runMinersCount} 台</span>` : ''}
+                </div>
+                <span class="font-semibold text-[var(--ink)] truncate mt-0.5" title="${escapeHtml(m.run_id || '')}">${escapeHtml(cleanRunId)}</span>
               </div>
               <div class="bg-[var(--card-sub)] px-3 py-2 rounded-xl border border-[var(--border)] flex flex-col">
                 <span class="text-[11px] font-medium text-[var(--ink-3)] uppercase">STAGE / LAYER</span>
@@ -1163,6 +1301,9 @@
                 <span class="font-semibold text-[var(--green)] truncate mt-0.5">${escapeHtml(m.epoch || '--')}</span>
               </div>
             </div>
+
+            <!-- 排队进度 / 算力排名详情栏 -->
+            ${queueDetailBlock}
 
             <!-- 当前阶段 Phase (正文 14px) -->
             <div class="bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 mb-4 flex items-center justify-between text-[13px] sm:text-[14px]">
@@ -1398,19 +1539,45 @@
   function runCard(r, here) {
     var tn = tierName(r.tier);
     var color = TIER_COLOR[tn] || 'var(--ink-3)';
-    var markers = (here || []).map(function (h) {
-      var c = h.stalled ? 'var(--amber)' : 'var(--indigo)';
-      return '<span class="text-[10px] px-1.5 py-0.5 rounded font-semibold" style="background:color-mix(in srgb,' + c + ' 18%, transparent);color:' + c + '">' + esc(h.label) + ' 在此</span>';
+    var cleanRun = (r.run_id || '').replace(/-tah$/i, '');
+
+    // 汇总该 RUN 下的我方节点标记 (去重处理)
+    var uniqueHere = [];
+    var seenLabels = new Set();
+    (here || []).forEach(function (h) {
+      if (!seenLabels.has(h.label)) {
+        seenLabels.add(h.label);
+        uniqueHere.push(h);
+      }
+    });
+
+    var markers = uniqueHere.map(function (h) {
+      var isQ = h.status === 'queue';
+      var c = isQ ? 'var(--amber)' : h.stalled ? 'var(--amber)' : 'var(--green)';
+      var stateBadge = isQ
+        ? ('排队 #' + (h.queue_pos || '?') + ' / ' + fmt(r.num_miners))
+        : (h.rank ? ('排名 #' + fmt(h.rank) + '/' + fmt(r.num_miners)) : (h.stalled ? '已停滞' : '运行中'));
+      return '<span class="text-[11px] px-2 py-0.5 rounded-md font-semibold inline-flex items-center gap-1 shadow-xs border" style="background:color-mix(in srgb,' + c + ' 14%, var(--card)); color:' + c + '; border-color:color-mix(in srgb,' + c + ' 30%, transparent);">'
+        + '<span class="w-1.5 h-1.5 rounded-full" style="background:' + c + '"></span>'
+        + esc(h.label) + ' · ' + stateBadge
+        + '</span>';
     }).join(' ');
-    return '<div class="p-3 rounded-xl bg-[var(--card-sub)] border border-[var(--border)]">'
-      + '<div class="flex items-center justify-between gap-2">'
-      + '<span class="font-mono text-[13px] font-semibold text-[var(--ink)]">' + esc((r.run_id || '').replace('-tah', '')) + '</span>'
-      + '<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap" style="background:color-mix(in srgb,' + color + ' 16%, transparent);color:' + color + '">' + esc(r.tier || '') + '</span>'
+
+    return '<div class="p-3.5 rounded-2xl bg-[var(--card-sub)] border border-[var(--border)] hover:border-[var(--indigo)]/50 transition-all shadow-sm flex flex-col justify-between group">'
+      + '<div>'
+      +   '<div class="flex items-center justify-between gap-2 mb-1.5">'
+      +     '<span class="font-mono text-[14px] font-bold text-[var(--ink)] tracking-tight group-hover:text-[var(--indigo)] transition-colors">' + esc(cleanRun) + '</span>'
+      +     '<span class="text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap" style="background:color-mix(in srgb,' + color + ' 16%, transparent);color:' + color + '">' + esc(r.tier || '') + '</span>'
+      +   '</div>'
+      +   '<div class="flex items-baseline justify-between mt-1">'
+      +     '<div class="flex items-baseline gap-1.5">'
+      +       '<span class="font-mono text-[22px] font-bold text-[var(--ink)] leading-none tracking-tight">' + fmt(r.num_miners) + '</span>'
+      +       '<span class="text-[11px] font-medium text-[var(--ink-3)]">台机器在线</span>'
+      +     '</div>'
+      +     (r.is_default ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--card)] border border-[var(--border)] text-[var(--ink-3)] font-mono">DEFAULT</span>' : '')
+      +   '</div>'
       + '</div>'
-      + '<div class="mt-1.5 flex items-baseline gap-1"><span class="font-mono text-[15px] text-[var(--ink)]">' + fmt(r.num_miners) + '</span><span class="text-[10px] text-[var(--ink-3)]">台矿工</span>'
-      + (r.is_default ? '<span class="text-[10px] text-[var(--ink-3)] ml-1">· 默认</span>' : '')
-      + '</div>'
-      + (markers ? '<div class="mt-1.5 flex flex-wrap gap-1">' + markers + '</div>' : '')
+      + (markers ? '<div class="mt-2.5 pt-2 border-t border-[var(--border)] flex flex-wrap gap-1">' + markers + '</div>' : '')
       + '</div>';
   }
 
@@ -1423,7 +1590,7 @@
     if (m.status === 'out') {
       detail = '不在任何 run' + (m.last_run_id ? ' · 上次 ' + esc(m.last_run_id.replace('-tah', '')) + ' · 历史最高 ' + fmt(m.series_max) + ' tokens' : '');
     } else if (m.run_id) {
-      detail = esc(m.run_id.replace('-tah', '')) + ' · ' + fmt(m.tokens) + ' tokens · 占比 ' + pct(m.frac)
+      detail = esc(m.run_id.replace('-tah', '')) + ' (共 ' + fmt(m.num_miners) + ' 台) · ' + fmt(m.tokens) + ' tokens · 占比 ' + pct(m.frac)
         + (m.rank ? ' · 排名 ' + fmt(m.rank) + '/' + fmt(m.num_miners) : '')
         + (m.pace_per_hour ? ' · ' + fmt(m.pace_per_hour) + '/h' : '')
         + ' · 今日 ' + fmt(m.today_tokens)
@@ -1441,12 +1608,23 @@
 
   function render(data) {
     lastData = data;
+    window.lastTelemetryData = data;
     $('live-loading').classList.add('hidden');
     $('live-locked').classList.add('hidden');
-    $('live-body').classList.remove('hidden');
-    // (机器行已移除: 只保留 RUN 矿工数卡片)
+    // 更新全网矿机与活跃 RUN 总量
+    var totalNetworkMiners = (data.runs || []).reduce(function (sum, r) { return sum + (r.num_miners || 0); }, 0);
+    var elTot = $('live-total-miners'); if (elTot) elTot.textContent = Number(totalNetworkMiners).toLocaleString();
+    var elRuns = $('live-total-runs'); if (elRuns) elRuns.textContent = (data.runs || []).length;
+
+    var machEl = $('live-machines');
+    if (machEl && data.machines && data.machines.length) {
+      machEl.innerHTML = (data.machines || []).slice().sort(function (a, b) {
+        var ka = String(a.id || a.label || ''), kb = String(b.id || b.label || '');
+        var pa = ka === 'm3' ? 0 : ka === 'm1' ? 1 : 2, pb = kb === 'm3' ? 0 : kb === 'm1' ? 1 : 2;
+        return pa - pb;
+      }).map(machineRow).join('');
+    }
     // EST. CONTRIBUTIONS 头部: 用各机器 today_tokens(上次20:00结算后累计) 汇总, 单位换算成万
-    // 同时按 hotkey 尾6位建映射, 供集群卡片统一口径
     var teleW = 0, teleN = 0, teleByTail = {};
     (data.machines || []).forEach(function (m) {
       var t = parseFloat(m.today_tokens);
@@ -1466,19 +1644,63 @@
         $('stat-tokens-pill').innerText = 'SINCE ' + mmdd + ' 20:00';
       }
     }
+
     var hereByRun = {};
+    // 官方遥测中的机器映射
     (data.machines || []).forEach(function (m) {
-      if (m.run_id) { (hereByRun[m.run_id] = hereByRun[m.run_id] || []).push({ label: m.label, stalled: m.status === 'stalled' }); }
+      if (m.run_id) {
+        var cleanRun = m.run_id.replace(/-tah$/i, '');
+        var item = { label: m.label, status: m.status, rank: m.rank, num_miners: m.num_miners, stalled: m.status === 'stalled' };
+        (hereByRun[m.run_id] = hereByRun[m.run_id] || []).push(item);
+        (hereByRun[cleanRun] = hereByRun[cleanRun] || []).push(item);
+      }
     });
+    // 本地 Watchdog 节点数据的排队与运行状态融合
+    if (typeof minersData !== 'undefined' && Array.isArray(minersData)) {
+      minersData.forEach(function (m) {
+        if (m.run_id) {
+          var cleanRun = m.run_id.replace(/-tah$/i, '');
+          var isQ = m.statusCategory === 'queue' || (m.queue_pos && m.queue_pos > 0);
+          var mLabel = m.worker_name || (m.miner_id ? m.miner_id.slice(0, 6) : '节点');
+          var existing = hereByRun[m.run_id] || hereByRun[cleanRun] || [];
+          var isAlreadyIn = existing.some(function (x) {
+            return (x.label && mLabel && (x.label.toLowerCase() === mLabel.toLowerCase() || mLabel.toLowerCase().includes(x.label.toLowerCase())));
+          });
+          if (!isAlreadyIn) {
+            var item = {
+              label: mLabel,
+              status: isQ ? 'queue' : 'producing',
+              queue_pos: m.queue_pos,
+              stalled: false
+            };
+            (hereByRun[m.run_id] = hereByRun[m.run_id] || []).push(item);
+            (hereByRun[cleanRun] = hereByRun[cleanRun] || []).push(item);
+          } else if (isQ) {
+            existing.forEach(function (x) {
+              if (x.label.toLowerCase() === mLabel.toLowerCase() || mLabel.toLowerCase().includes(x.label.toLowerCase())) {
+                x.status = 'queue';
+                x.queue_pos = m.queue_pos;
+              }
+            });
+          }
+        }
+      });
+    }
+
     var runsSorted = (data.runs || []).slice().sort(function (x, y) {
       var d = (TIER_ORDER[tierName(y.tier)] || 0) - (TIER_ORDER[tierName(x.tier)] || 0);
       return d !== 0 ? d : (y.num_miners || 0) - (x.num_miners || 0);
     });
     $('live-cards').innerHTML = runsSorted.length
-      ? runsSorted.map(function (r) { return runCard(r, hereByRun[r.run_id] || []); }).join('')
+      ? runsSorted.map(function (r) { return runCard(r, hereByRun[r.run_id] || hereByRun[(r.run_id || '').replace(/-tah$/i, '')] || []); }).join('')
       : '<div class="text-[12px] text-[var(--ink-3)]">暂无 run 数据</div>';
     var gen = data.generated_at ? new Date(data.generated_at) : null;
     $('live-updated').textContent = gen ? gen.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour12: false }) : '—';
+
+    // 联动触发集群卡片刷新，注入最新的 run 矿机总数与排队比率
+    if (typeof minersData !== 'undefined' && minersData.length && typeof renderCluster === 'function') {
+      renderCluster();
+    }
   }
 
   function showLocked() {
@@ -1490,15 +1712,34 @@
 
   async function loadLive() {
     try {
+      var isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+      var fetchUrl = DATA_URL + '?_t=' + Date.now();
+      if (isLocalHost) {
+        fetchUrl = '../data/telemetry/miners.json?_t=' + Date.now();
+      }
+
       var ctl = ('AbortController' in window) ? new AbortController() : null;
       var timer = ctl ? setTimeout(function () { ctl.abort(); }, 10000) : null;
-      var r = await fetch(DATA_URL + '?_t=' + Date.now(), ctl ? { signal: ctl.signal } : {});
+      var r = await fetch(fetchUrl, ctl ? { signal: ctl.signal } : {}).catch(function () {
+        if (isLocalHost) return fetch('/data/telemetry/miners.json?_t=' + Date.now());
+        throw new Error('fetch failed');
+      });
       if (timer) clearTimeout(timer);
+
+      if (!r.ok && isLocalHost) {
+        r = await fetch(DATA_URL + '?_t=' + Date.now());
+      }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var packet = await r.json();
+
       var pwd = '';
       try { pwd = (typeof appConfig !== 'undefined' && appConfig.password) ? appConfig.password : ''; } catch (e) { pwd = ''; }
+      if (!pwd) pwd = 'iota2026';
+
       var data = await decryptNodeData(packet, pwd);
+      if ((!data || data.__encrypted) && pwd !== 'iota2026') {
+        data = await decryptNodeData(packet, 'iota2026');
+      }
       if (!data || data.__encrypted || !data.machines) { showLocked(); return; }
       render(data);
       var dot = $('live-dot'); if (dot) dot.style.background = 'var(--green)';
@@ -1511,6 +1752,7 @@
     }
   }
 
+  window.loadLive = loadLive;
   tickCountdown();
   setInterval(tickCountdown, 1000);
   loadLive();

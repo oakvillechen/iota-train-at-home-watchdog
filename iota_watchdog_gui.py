@@ -49,9 +49,10 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.7.1"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
+TOKEN_CACHE_FILE = os.path.join(LOG_DIR, "token_history_cache.json")
 APP_NAME = "IOTA Train at Home"
 SYS_APP_PATH = "/Applications/IOTA Train at Home.app"
 USER_APP_PATH = os.path.expanduser("~/Applications/IOTA Train at Home.app")
@@ -901,9 +902,9 @@ class IotaWatchdogApp:
         except Exception:
             ctx = None
 
-        def _get_json(url):
+        def _get_json(url, timeout=14):
             req = urllib.request.Request(url, headers={"User-Agent": "iota-train-at-home-1.1.0", "Accept-Encoding": "gzip"})
-            kwargs = {"timeout": 8}
+            kwargs = {"timeout": timeout}
             if ctx:
                 kwargs["context"] = ctx
             with urllib.request.urlopen(req, **kwargs) as resp:
@@ -911,6 +912,22 @@ class IotaWatchdogApp:
                 if raw[:2] == b"\x1f\x8b":
                     raw = gzip.decompress(raw)
                 return json.loads(raw.decode("utf-8"))
+
+        def _load_token_cache():
+            if os.path.exists(TOKEN_CACHE_FILE):
+                try:
+                    with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as cf:
+                        return json.load(cf)
+                except Exception:
+                    pass
+            return {"api_runs": {}, "log_runs": {}}
+
+        def _save_token_cache(cache_obj):
+            try:
+                with open(TOKEN_CACHE_FILE, "w", encoding="utf-8") as cf:
+                    json.dump(cache_obj, cf, ensure_ascii=False)
+            except Exception:
+                pass
 
         try:
             totals = _get_json(f"{base}/v1/entitlements/totals/hotkey/{hotkey}")
@@ -1022,21 +1039,35 @@ class IotaWatchdogApp:
                 cand_runs = ["4.13.7.18-tah", "4.13.7.23-tah", "4.13.7.20-tah"]
 
             now = datetime.now()
+            token_cache = _load_token_cache()
+            cached_api_runs = token_cache.setdefault("api_runs", {})
+            cached_log_runs = token_cache.setdefault("log_runs", {})
 
             def _fetch_run_pts(r_name):
                 c_run = r_name.replace("run-", "").replace("_", ".")
                 u = f"{base}/miners/{hotkey}/runs/{c_run}/tokens"
                 for _attempt in range(3):
                     try:
-                        res = _get_json(u)
-                        return r_name, res
+                        res = _get_json(u, timeout=14)
+                        if isinstance(res, dict) and res.get("data_points"):
+                            return r_name, res
                     except Exception:
-                        time.sleep(0.4)
-                return r_name, {}
+                        time.sleep(0.5 * (_attempt + 1))
+                # 若本次 API 超时/5xx，回退使用本地持久化的最近一次有效链上采样点，绝不退化为 0
+                fallback_res = cached_api_runs.get(r_name) or cached_api_runs.get(c_run) or {}
+                return r_name, fallback_res
 
+            # 优先单独请求当前主 Run，保证主 Run 100% 零并发竞争拿到最新链上数据
+            run_res_map = {}
+            if self.current_run_id and "检测中" not in self.current_run_id:
+                _, p_res = _fetch_run_pts(self.current_run_id)
+                run_res_map[self.current_run_id] = p_res
+            other_runs = [r for r in cand_runs if r not in run_res_map]
             from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=min(4, max(1, len(cand_runs)))) as ex:
-                run_res_map = dict(ex.map(_fetch_run_pts, cand_runs))
+            if other_runs:
+                with ThreadPoolExecutor(max_workers=min(3, len(other_runs))) as ex:
+                    for r_k, r_v in ex.map(_fetch_run_pts, other_runs):
+                        run_res_map[r_k] = r_v
 
             sorted_run_pts = {}
             api_chain_token_sum = 0
@@ -1045,6 +1076,12 @@ class IotaWatchdogApp:
             for r_name, res_obj in run_res_map.items():
                 points = res_obj.get("data_points", []) if isinstance(res_obj, dict) else []
                 if points:
+                    # 更新持久化缓存（保留最近 150 个链上采样点）
+                    cached_api_runs[r_name] = {
+                        "rank": res_obj.get("rank"),
+                        "num_miners": res_obj.get("num_miners"),
+                        "data_points": points[-150:]
+                    }
                     s_pts = sorted(points, key=lambda x: x.get("timestamp", 0))
                     sorted_run_pts[r_name] = s_pts
                     latest_tc = s_pts[-1].get("token_count", 0)
@@ -1084,7 +1121,7 @@ class IotaWatchdogApp:
                 if primary_res_obj.get("num_miners") is not None:
                     self.chain_num_miners = primary_res_obj.get("num_miners")
             try:
-                rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank")
+                rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank", timeout=10)
                 if rank_res.get("rank") is not None:
                     self.chain_rank = rank_res.get("rank")
                 if rank_res.get("num_hotkeys") is not None:
@@ -1094,14 +1131,24 @@ class IotaWatchdogApp:
             except Exception:
                 pass
 
-            # 3. 融合本地 CLI 日志中的高精度 Token 采样点 (解决官方 API 每 5 小时才采样 1 个点导致的各小时均值失真)
+            # 3. 融合本地 CLI 日志中的高精度 Token 采样点 + 持久化缓存 (防止 cli.old.log 再次轮转覆盖后丢失更早小时明细)
             try:
                 re_bsr_log = re.compile(r"Backwards since reset for miner \w+:\s*(\d+)")
                 re_ts_log = re.compile(r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})")
                 re_hb_run = re.compile(r"['\"]run_id['\"]\s*:\s*['\"]([^'\"]+)['\"]")
                 tok_per_act = getattr(self, "tokens_per_activation", 3200) or 3200
 
+                # 先载入本地缓存的最近 7 天日志采样点
+                cutoff_7d = now.timestamp() - 7 * 86400
                 log_pts_by_run = {}
+                for r_k, c_pts in cached_log_runs.items():
+                    if isinstance(c_pts, list):
+                        log_pts_by_run[r_k] = {
+                            int(p["timestamp"]): int(p["token_count"])
+                            for p in c_pts
+                            if isinstance(p, dict) and p.get("timestamp", 0) >= cutoff_7d
+                        }
+
                 max_bsr_Today = 0
                 today_prefix = now.strftime("%Y-%m-%d")
                 cur_file_run = primary_run_key
@@ -1109,7 +1156,6 @@ class IotaWatchdogApp:
                     is_today_f = os.path.basename(lf_path).startswith(today_prefix)
                     with open(lf_path, "r", encoding="utf-8", errors="ignore") as lf:
                         file_lines = lf.readlines()
-                    # 先从该文件首个含 run_id 的心跳确定该文件起始所属的 Run，避免在首个心跳之前的点被错分到其他 Run
                     for line in file_lines:
                         if "run_id" in line:
                             mr = re_hb_run.search(line)
@@ -1128,32 +1174,29 @@ class IotaWatchdogApp:
                                 b_val = int(mb.group(1))
                                 if is_today_f and b_val > max_bsr_Today:
                                     max_bsr_Today = b_val
-                                ts_val = datetime.strptime(mts.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
-                                log_pts_by_run.setdefault(cur_file_run, []).append({
-                                    "timestamp": ts_val,
-                                    "token_count": b_val * tok_per_act
-                                })
+                                ts_val = int(datetime.strptime(mts.group(1), "%Y-%m-%d %H:%M:%S").timestamp())
+                                r_dict = log_pts_by_run.setdefault(cur_file_run, {})
+                                r_dict[ts_val] = max(r_dict.get(ts_val, 0), b_val * tok_per_act)
 
                 if max_bsr_Today > self.forward_count:
                     self.forward_count = max_bsr_Today
                 if max_bsr_Today > self.backward_count:
                     self.backward_count = max_bsr_Today
 
-                for r_key, l_pts in log_pts_by_run.items():
-                    if not l_pts:
+                for r_key, ts_map in log_pts_by_run.items():
+                    if not ts_map:
                         continue
-                    l_pts.sort(key=lambda x: x["timestamp"])
+                    l_pts = [{"timestamp": ts_k, "token_count": tc_v} for ts_k, tc_v in sorted(ts_map.items())]
+                    cached_log_runs[r_key] = l_pts[-2500:]
                     api_pts = sorted_run_pts.get(r_key, [])
                     if api_pts:
                         l_min_ts = l_pts[0]["timestamp"]
                         l_max_ts = l_pts[-1]["timestamp"]
                         before_pts = [p for p in api_pts if p.get("timestamp", 0) < l_min_ts]
-                        # 仅保留晚于本地日志且不落后于本地最新计数、同时不截断本地明细的链上点
                         after_pts = [
                             p for p in api_pts
                             if p.get("timestamp", 0) > l_max_ts and p.get("token_count", 0) >= l_pts[-1]["token_count"]
                         ]
-                        # 若本地日志最后一个点之前存在更高或更滞后的 API 点，确保单调性不回退
                         if before_pts and before_pts[-1].get("token_count", 0) > l_pts[0]["token_count"]:
                             l_pts = [lp for lp in l_pts if lp["token_count"] >= before_pts[-1].get("token_count", 0)]
                         last_net_tok = api_pts[-1].get("network_tokens", 0)
@@ -1168,6 +1211,8 @@ class IotaWatchdogApp:
                         sorted_run_pts[r_key] = l_pts
             except Exception:
                 pass
+
+            _save_token_cache(token_cache)
 
             primary_pts = sorted_run_pts.get(primary_run_key) or sorted_run_pts.get(primary_run_clean) or []
             if not primary_pts and sorted_run_pts:
@@ -2693,6 +2738,22 @@ class IotaWatchdogApp:
                     self.last_activation_epoch = self.current_epoch_num
             else:
                 self.backward_count += 1
+                # 实时将最新完成的 Backward Token 点写入持久化缓存，防止 CLI 日志高频轮转覆盖丢失
+                try:
+                    r_k = self.current_run_id if (self.current_run_id and "检测" not in self.current_run_id) else ""
+                    if r_k and os.path.exists(TOKEN_CACHE_FILE):
+                        tok_act = getattr(self, "tokens_per_activation", 3200) or 3200
+                        with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as cf:
+                            tc_data = json.load(cf)
+                        l_list = tc_data.setdefault("log_runs", {}).setdefault(r_k, [])
+                        now_i = int(time.time())
+                        if not l_list or l_list[-1].get("timestamp", 0) < now_i:
+                            l_list.append({"timestamp": now_i, "token_count": self.backward_count * tok_act})
+                            tc_data["log_runs"][r_k] = l_list[-2500:]
+                            with open(TOKEN_CACHE_FILE, "w", encoding="utf-8") as cf:
+                                json.dump(tc_data, cf, ensure_ascii=False)
+                except Exception:
+                    pass
 
             # 只要产生训练计算，必然已经脱离排队，清理排队位置
             self.last_queue_position = None

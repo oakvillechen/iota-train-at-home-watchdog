@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.6.9"
+APP_VERSION = "1.7.0"
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
 APP_NAME = "IOTA Train at Home"
@@ -103,7 +103,7 @@ KEY_LOG_KEYWORDS = [
     "epoch", "step", "gradient", "upload", "earning", "reward", "payout",
     "incentive", "balance", "500 - Internal Server Error", "CRITICAL", "ERROR",
     "FORWARD complete", "BACKWARD complete", "Forward pass", "Backward pass",
-    "FORWARD pass", "BACKWARD pass", "Starting FORWARD",
+    "FORWARD pass", "BACKWARD pass", "Starting FORWARD", "Backwards since reset",
     "Downloaded activation", "Peer status dict has", "Broadcast peer status",
     "all_layers_training", "activation_queue", "select_by_capacity", "report_loss",
     "Failed to send", "Peer unreachable", "unreachable", "dropping",
@@ -299,6 +299,7 @@ class IotaWatchdogApp:
         self.queue_id = "检测中..."
         self.forward_count = 0
         self.backward_count = 0
+        self.tokens_per_activation = 3200
         self.is_actively_training = False
         self.last_peer_log_time = 0
         self.last_queue_heartbeat_log_time = 0
@@ -605,11 +606,34 @@ class IotaWatchdogApp:
                     if all_matches:
                         self.all_layers_ready = "已就绪 (True)" if all_matches[-1].group(1) == "True" else "未就绪 (False)"
 
-                    # 计算 Forward / Backward 历史 (兼容新旧 CLI 日志格式与大小写)
-                    fwd_matches = re.findall(r"(?:FORWARD complete|forward pass|starting forward pass)", content, re.IGNORECASE)
-                    bwd_matches = re.findall(r"(?:BACKWARD complete|backward pass)", content, re.IGNORECASE)
-                    self.forward_count = len(fwd_matches)
-                    self.backward_count = len(bwd_matches)
+                    # 计算 Forward / Backward 历史 (跨当天轮转日志 .old.log + .log，单次精确匹配 + 官方内置计数器校准)
+                    today_prefix = datetime.now().strftime("%Y-%m-%d")
+                    today_cli_logs = sorted(
+                        [p for p in glob.glob(os.path.join(LOG_DIR, f"{today_prefix}*cli*.log")) if os.path.exists(p)],
+                        key=lambda x: os.path.getmtime(x)
+                    )
+                    if not today_cli_logs:
+                        today_cli_logs = [latest_log]
+
+                    total_fwd = 0
+                    total_bwd = 0
+                    max_bsr = 0
+                    for t_log in today_cli_logs:
+                        try:
+                            t_content = content if t_log == latest_log else open(t_log, "r", encoding="utf-8", errors="ignore").read()
+                            sh_m = re.search(r"Got activation shape:\s*torch\.Size\(\[(\d+),\s*(\d+)", t_content)
+                            if sh_m:
+                                self.tokens_per_activation = int(sh_m.group(1)) * int(sh_m.group(2))
+                            total_fwd += len(re.findall(r"(?:Starting FORWARD pass|FORWARD complete)", t_content, re.IGNORECASE))
+                            total_bwd += len(re.findall(r"BACKWARD complete", t_content, re.IGNORECASE))
+                            bsr_list = [int(x) for x in re.findall(r"Backwards since reset for miner \w+:\s*(\d+)", t_content)]
+                            if bsr_list:
+                                max_bsr = max(max_bsr, max(bsr_list))
+                        except Exception:
+                            pass
+
+                    self.forward_count = max(total_fwd, max_bsr)
+                    self.backward_count = max(total_bwd, max_bsr)
 
                     # 尾部状态解析：判定当前是排队中还是正式训练中
                     tail_content = "\n".join(lines)
@@ -672,11 +696,17 @@ class IotaWatchdogApp:
                     elif list(re.finditer(r"Activation push RECV", content[-5000:])):
                         self.orchestrator_status = "正常接收激活中"
 
-                    # 初始解析 heartbeat 中的 epoch (P2)
+                    # 初始解析 heartbeat 中的 epoch / run_id / layer / phase (P2)
                     hb_matches = list(re.finditer(r"request to /miner/heartbeat.*?response:\s*({.*?})", content))
                     if hb_matches:
                         try:
                             hb_dict = eval(hb_matches[-1].group(1))
+                            if hb_dict.get("run_id"):
+                                self.current_run_id = hb_dict["run_id"]
+                            if hb_dict.get("layer") is not None:
+                                self.current_layer = f"Layer {hb_dict['layer']}"
+                            if hb_dict.get("phase"):
+                                self.current_phase = hb_dict["phase"]
                             if hb_dict.get("epoch") is not None:
                                 self.current_epoch_num = int(hb_dict["epoch"])
                                 self.current_epoch = f"Epoch {self.current_epoch_num}"
@@ -967,7 +997,7 @@ class IotaWatchdogApp:
             try:
                 all_runs_data = _get_json(f"{base}/runs")
                 for r_item in all_runs_data.get("runs", []):
-                    r_name = r_item.get("run_name") or r_item.get("name")
+                    r_name = r_item.get("run_id") or r_item.get("run_name") or r_item.get("name")
                     if r_name and r_name not in cand_runs:
                         cand_runs.append(r_name)
             except Exception:
@@ -977,7 +1007,7 @@ class IotaWatchdogApp:
             run_pattern = re.compile(r'\b(?:\d+\.){2,4}\d+-tah\b|run[-_](\d+(?:_\d+){2,4}-tah)\b')
             cli_logs = glob.glob(os.path.join(LOG_DIR, "*cli*.log"))
             cli_logs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-            for lf_path in cli_logs[:5]:
+            for lf_path in cli_logs[:6]:
                 try:
                     with open(lf_path, "r", errors="ignore") as lf:
                         for l in lf:
@@ -989,49 +1019,167 @@ class IotaWatchdogApp:
                     pass
 
             if not cand_runs:
-                cand_runs = ["4.13.7.6-tah", "4.13.7.8-tah", "4.12.16.20-tah"]
-
-            # 若主窗口当前 Run ID 仍为检测中，用检测到的最新 Run 填充
-            if (not self.current_run_id or "检测中" in self.current_run_id) and cand_runs:
-                self.current_run_id = cand_runs[0]
-                if hasattr(self, "lbl_run_id"):
-                    self.lbl_run_id.config(text=f"Run: {self.current_run_id}")
-
-            # 查询矿工在主 Run 下的官方排名 (P0 功能 2)
-            primary_run_clean = cand_runs[0].replace("run-", "").replace("_", ".") if cand_runs else ""
-            try:
-                rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank")
-                self.chain_rank = rank_res.get("rank")
-                self.chain_num_miners = rank_res.get("num_hotkeys")
-                self.chain_contribution_perc = rank_res.get("act_contribution_perc")
-            except Exception:
-                pass
+                cand_runs = ["4.13.7.18-tah", "4.13.7.23-tah", "4.13.7.20-tah"]
 
             now = datetime.now()
 
             def _fetch_run_pts(r_name):
                 c_run = r_name.replace("run-", "").replace("_", ".")
                 u = f"{base}/miners/{hotkey}/runs/{c_run}/tokens"
-                try:
-                    res = _get_json(u)
-                    return r_name, res.get("data_points", [])
-                except Exception:
-                    return r_name, []
+                for _attempt in range(3):
+                    try:
+                        res = _get_json(u)
+                        return r_name, res
+                    except Exception:
+                        time.sleep(0.4)
+                return r_name, {}
 
             from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=min(8, max(1, len(cand_runs)))) as ex:
-                run_pts_map = dict(ex.map(_fetch_run_pts, cand_runs))
+            with ThreadPoolExecutor(max_workers=min(4, max(1, len(cand_runs)))) as ex:
+                run_res_map = dict(ex.map(_fetch_run_pts, cand_runs))
 
             sorted_run_pts = {}
-            for r_name, points in run_pts_map.items():
+            api_chain_token_sum = 0
+            best_active_run = None
+            best_growth_key = -1
+            for r_name, res_obj in run_res_map.items():
+                points = res_obj.get("data_points", []) if isinstance(res_obj, dict) else []
                 if points:
-                    sorted_run_pts[r_name] = sorted(points, key=lambda x: x.get("timestamp", 0))
+                    s_pts = sorted(points, key=lambda x: x.get("timestamp", 0))
+                    sorted_run_pts[r_name] = s_pts
+                    latest_tc = s_pts[-1].get("token_count", 0)
+                    api_chain_token_sum += latest_tc
+                    if latest_tc > 0:
+                        g_ts = s_pts[-1].get("timestamp", 0)
+                        for idx in range(len(s_pts) - 1, 0, -1):
+                            if s_pts[idx].get("token_count", 0) > s_pts[idx - 1].get("token_count", 0):
+                                g_ts = s_pts[idx].get("timestamp", 0)
+                                break
+                        if g_ts > best_growth_key:
+                            best_growth_key = g_ts
+                            best_active_run = r_name
 
-            primary_pts = sorted_run_pts.get(cand_runs[0]) or sorted_run_pts.get(primary_run_clean) or []
+            # 确定矿工当前实际活跃的主 Run (优先当前正有 token 产出的 Run，其次心跳 current_run_id)
+            if self.current_run_id and "检测中" not in self.current_run_id and sorted_run_pts.get(self.current_run_id, [{}])[-1].get("token_count", 0) > 0:
+                primary_run_key = self.current_run_id
+            elif best_active_run:
+                primary_run_key = best_active_run
+            elif self.current_run_id and "检测中" not in self.current_run_id:
+                primary_run_key = self.current_run_id
+            else:
+                primary_run_key = cand_runs[0]
+
+            if not self.current_run_id or "检测中" in self.current_run_id or (best_active_run and sorted_run_pts.get(self.current_run_id, [{}])[-1].get("token_count", 0) == 0):
+                self.current_run_id = primary_run_key
+                if hasattr(self, "lbl_run_id"):
+                    self.root.after(0, lambda r=self.current_run_id: self.lbl_run_id.config(text=f"Run: {r}"))
+
+            primary_run_clean = primary_run_key.replace("run-", "").replace("_", ".")
+
+            # 查询矿工在主 Run 下的官方排名 (优先从 /tokens 响应及 /run_level_rank 同步)
+            primary_res_obj = run_res_map.get(primary_run_key) or run_res_map.get(primary_run_clean) or {}
+            if isinstance(primary_res_obj, dict):
+                if primary_res_obj.get("rank") is not None:
+                    self.chain_rank = primary_res_obj.get("rank")
+                if primary_res_obj.get("num_miners") is not None:
+                    self.chain_num_miners = primary_res_obj.get("num_miners")
+            try:
+                rank_res = _get_json(f"{base}/v1/epoch_miner_scores/runs/{primary_run_clean}/hotkeys/{hotkey}/run_level_rank")
+                if rank_res.get("rank") is not None:
+                    self.chain_rank = rank_res.get("rank")
+                if rank_res.get("num_hotkeys") is not None:
+                    self.chain_num_miners = rank_res.get("num_hotkeys")
+                if rank_res.get("act_contribution_perc") is not None:
+                    self.chain_contribution_perc = rank_res.get("act_contribution_perc")
+            except Exception:
+                pass
+
+            # 3. 融合本地 CLI 日志中的高精度 Token 采样点 (解决官方 API 每 5 小时才采样 1 个点导致的各小时均值失真)
+            try:
+                re_bsr_log = re.compile(r"Backwards since reset for miner \w+:\s*(\d+)")
+                re_ts_log = re.compile(r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})")
+                re_hb_run = re.compile(r"['\"]run_id['\"]\s*:\s*['\"]([^'\"]+)['\"]")
+                tok_per_act = getattr(self, "tokens_per_activation", 3200) or 3200
+
+                log_pts_by_run = {}
+                max_bsr_Today = 0
+                today_prefix = now.strftime("%Y-%m-%d")
+                cur_file_run = primary_run_key
+                for lf_path in sorted(cli_logs[:6], key=lambda x: os.path.getmtime(x)):
+                    is_today_f = os.path.basename(lf_path).startswith(today_prefix)
+                    with open(lf_path, "r", encoding="utf-8", errors="ignore") as lf:
+                        file_lines = lf.readlines()
+                    # 先从该文件首个含 run_id 的心跳确定该文件起始所属的 Run，避免在首个心跳之前的点被错分到其他 Run
+                    for line in file_lines:
+                        if "run_id" in line:
+                            mr = re_hb_run.search(line)
+                            if mr:
+                                cur_file_run = mr.group(1).replace("run-", "").replace("_", ".")
+                                break
+                    for line in file_lines:
+                        if "run_id" in line:
+                            mr = re_hb_run.search(line)
+                            if mr:
+                                cur_file_run = mr.group(1).replace("run-", "").replace("_", ".")
+                        elif "Backwards since reset for miner" in line and ":" in line:
+                            mb = re_bsr_log.search(line)
+                            mts = re_ts_log.search(line)
+                            if mb and mts:
+                                b_val = int(mb.group(1))
+                                if is_today_f and b_val > max_bsr_Today:
+                                    max_bsr_Today = b_val
+                                ts_val = datetime.strptime(mts.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                                log_pts_by_run.setdefault(cur_file_run, []).append({
+                                    "timestamp": ts_val,
+                                    "token_count": b_val * tok_per_act
+                                })
+
+                if max_bsr_Today > self.forward_count:
+                    self.forward_count = max_bsr_Today
+                if max_bsr_Today > self.backward_count:
+                    self.backward_count = max_bsr_Today
+
+                for r_key, l_pts in log_pts_by_run.items():
+                    if not l_pts:
+                        continue
+                    l_pts.sort(key=lambda x: x["timestamp"])
+                    api_pts = sorted_run_pts.get(r_key, [])
+                    if api_pts:
+                        l_min_ts = l_pts[0]["timestamp"]
+                        l_max_ts = l_pts[-1]["timestamp"]
+                        before_pts = [p for p in api_pts if p.get("timestamp", 0) < l_min_ts]
+                        # 仅保留晚于本地日志且不落后于本地最新计数、同时不截断本地明细的链上点
+                        after_pts = [
+                            p for p in api_pts
+                            if p.get("timestamp", 0) > l_max_ts and p.get("token_count", 0) >= l_pts[-1]["token_count"]
+                        ]
+                        # 若本地日志最后一个点之前存在更高或更滞后的 API 点，确保单调性不回退
+                        if before_pts and before_pts[-1].get("token_count", 0) > l_pts[0]["token_count"]:
+                            l_pts = [lp for lp in l_pts if lp["token_count"] >= before_pts[-1].get("token_count", 0)]
+                        last_net_tok = api_pts[-1].get("network_tokens", 0)
+                        last_frac = api_pts[-1].get("contribution_fraction", 0)
+                        for lp in l_pts:
+                            lp.setdefault("network_tokens", last_net_tok)
+                            lp.setdefault("contribution_fraction", last_frac)
+                        merged = before_pts + l_pts + after_pts
+                        merged.sort(key=lambda x: x.get("timestamp", 0))
+                        sorted_run_pts[r_key] = merged
+                    else:
+                        sorted_run_pts[r_key] = l_pts
+            except Exception:
+                pass
+
+            primary_pts = sorted_run_pts.get(primary_run_key) or sorted_run_pts.get(primary_run_clean) or []
             if not primary_pts and sorted_run_pts:
                 primary_pts = list(sorted_run_pts.values())[0]
 
-            self.chain_token_count = sum(pts[-1].get("token_count", 0) for pts in sorted_run_pts.values() if pts)
+            if self.chain_contribution_perc is None and primary_pts:
+                last_f = primary_pts[-1].get("contribution_fraction")
+                if last_f:
+                    self.chain_contribution_perc = last_f
+
+            # 链上已确认 Ground Truth 统计所有 Run 最新官方 API 确认值
+            self.chain_token_count = api_chain_token_sum
             self.chain_network_tokens = primary_pts[-1].get("network_tokens", 0) if primary_pts else 0
             self.chain_data_available = True
 
@@ -1072,34 +1220,37 @@ class IotaWatchdogApp:
                 self.is_zombie = False
                 self.zombie_alert_text = ""
 
-            def get_tokens_at(pts, target_ts):
-                if not pts:
+            def get_monotonic_run_tokens(pts, ts0, ts1):
+                """
+                分段单调累加计算 [ts0, ts1] 期间的有效 Token 增长量。
+                即使中途节点退队/重置导致 token_count 归零，也能准确保留重置前的历史产出与重置后的新增产出。
+                """
+                if not pts or ts1 <= ts0:
                     return 0.0
-                if target_ts <= pts[0].get("timestamp", 0):
-                    return 0.0 if pts[0].get("token_count", 0) == 0 else float(pts[0].get("token_count", 0))
-                if target_ts >= pts[-1].get("timestamp", 0):
-                    return float(pts[-1].get("token_count", 0))
+                tot_run = 0.0
                 for i in range(len(pts) - 1):
-                    t0 = pts[i].get("timestamp", 0)
-                    c0 = pts[i].get("token_count", 0)
-                    t1 = pts[i+1].get("timestamp", 0)
-                    c1 = pts[i+1].get("token_count", 0)
-                    if t0 <= target_ts <= t1:
-                        if t1 == t0:
-                            return float(c0)
-                        ratio = (target_ts - t0) / (t1 - t0)
-                        return float(c0) + (float(c1) - float(c0)) * ratio
-                return float(pts[-1].get("token_count", 0))
+                    t0 = float(pts[i].get("timestamp", 0))
+                    c0 = float(pts[i].get("token_count", 0))
+                    t1 = float(pts[i + 1].get("timestamp", 0))
+                    c1 = float(pts[i + 1].get("token_count", 0))
+                    if t1 <= ts0 or t0 >= ts1:
+                        continue
+                    ov_start = max(t0, ts0)
+                    ov_end = min(t1, ts1)
+                    frac = ((ov_end - ov_start) / (t1 - t0)) if t1 > t0 else 1.0
+                    if c1 >= c0:
+                        tot_run += (c1 - c0) * frac
+                    elif c1 > 0:
+                        # 区间内发生过归零重置并重新增长到 c1
+                        tot_run += c1 * frac
+                return tot_run
 
             def get_range_tokens(t_start, t_end):
                 ts0 = t_start.timestamp()
                 ts1 = t_end.timestamp()
                 tot = 0.0
                 for pts in sorted_run_pts.values():
-                    v0 = get_tokens_at(pts, ts0)
-                    v1 = get_tokens_at(pts, ts1)
-                    if v1 > v0:
-                        tot += (v1 - v0)
+                    tot += get_monotonic_run_tokens(pts, ts0, ts1)
                 return tot
 
             # 确定前一次结算时间戳（优先从官方 next_payout_ts 推导 24h 前，或取 20:00 结算锚点）
@@ -1215,7 +1366,8 @@ class IotaWatchdogApp:
 
                 # 更新链上收益与本地估算并列面板 (P0 功能 2)
                 if hasattr(self, "lbl_chain_metrics"):
-                    local_wan = (self.forward_count * 3200) / 10000.0
+                    tok_per_act = getattr(self, "tokens_per_activation", 3200) or 3200
+                    local_wan = (self.forward_count * tok_per_act) / 10000.0
                     chain_wan = self.chain_token_count / 10000.0
                     rank_info = f"第 {self.chain_rank}/{self.chain_num_miners} 名" if self.chain_rank else "排名同步中"
                     if self.chain_contribution_perc is not None:
@@ -2469,9 +2621,12 @@ class IotaWatchdogApp:
                 try:
                     hb_data = eval(hb_m.group(1))
                     status = hb_data.get("status", "")
+                    phase = hb_data.get("phase", "")
                     layer = hb_data.get("layer")
                     epoch = hb_data.get("epoch")
                     run_id = hb_data.get("run_id")
+                    if phase:
+                        self.current_phase = phase
                     if layer is not None:
                         self.current_layer = f"Layer {layer}"
                     if epoch is not None:
@@ -2509,11 +2664,27 @@ class IotaWatchdogApp:
                 except Exception:
                     pass
 
-        # 统计 Forward / Backward (大小写不敏感匹配新旧 CLI 格式)
-        is_fwd = bool(re.search(r"(?:FORWARD complete|forward pass|starting forward pass)", line_clean, re.IGNORECASE))
-        is_bwd = bool(re.search(r"(?:BACKWARD complete|backward pass)", line_clean, re.IGNORECASE))
+        # 提取当前 Run 实际的 batch * sequence_length (默认 4 * 800 = 3200 tokens/activation)
+        if "Got activation shape:" in line_clean:
+            sh_m = re.search(r"Got activation shape:\s*torch\.Size\(\[(\d+),\s*(\d+)", line_clean)
+            if sh_m:
+                self.tokens_per_activation = int(sh_m.group(1)) * int(sh_m.group(2))
 
-        if is_fwd or is_bwd:
+        # 提取官方内置的重置后累计 Backward 次数 (消除因日志跨文件轮转导致的计数偏少)
+        if "Backwards since reset for miner" in line_clean and ":" in line_clean:
+            bsr_m = re.search(r"Backwards since reset for miner \w+:\s*(\d+)", line_clean)
+            if bsr_m:
+                bsr_val = int(bsr_m.group(1))
+                if bsr_val > self.forward_count:
+                    self.forward_count = bsr_val
+                if bsr_val > self.backward_count:
+                    self.backward_count = bsr_val
+
+        # 统计 Forward / Backward (精确匹配单次计算动作，避免被 GPU memory usage / Timer Logger 重复计数 6~12 倍)
+        is_fwd = bool(re.search(r"(?:Starting FORWARD pass|FORWARD complete)", line_clean, re.IGNORECASE))
+        is_bwd = bool(re.search(r"BACKWARD complete", line_clean, re.IGNORECASE))
+
+        if (is_fwd or is_bwd) and not getattr(self, "_replaying_initial_tail", False):
             if is_fwd:
                 self.forward_count += 1
                 self.orchestrator_status = "正常接收激活中"
@@ -3086,16 +3257,22 @@ class IotaWatchdogApp:
                 latest_log = self.get_latest_log()
                 if latest_log:
                     if latest_log != self.current_log_file:
+                        is_first_file = (self.current_log_file is None)
                         self.current_log_file = latest_log
                         try:
                             with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:
                                 all_lines = f.readlines()
                                 initial_lines = all_lines[-300:]
-                                for l in initial_lines:
-                                    if not self.filter_key_logs.get() or self.is_key_event(l):
-                                        self.classify_and_append(l)
+                                self._replaying_initial_tail = is_first_file
+                                try:
+                                    for l in initial_lines:
+                                        if not self.filter_key_logs.get() or self.is_key_event(l):
+                                            self.classify_and_append(l)
+                                finally:
+                                    self._replaying_initial_tail = False
                                 self.log_file_pos = f.tell()
                         except Exception:
+                            self._replaying_initial_tail = False
                             self.log_file_pos = 0
 
                     if os.path.exists(self.current_log_file):

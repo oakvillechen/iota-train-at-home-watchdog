@@ -79,12 +79,22 @@ function lastSettlementMs(nowMs) {
 }
 
 // ---------- per-miner analysis ----------
-function valueAt(points, ms) {
-  let v = null;
-  for (const pt of points) {
-    if (pt.timestamp * 1000 <= ms) v = pt.token_count; else break;
+function monotonicDeltaBetween(points, startMs, endMs) {
+  if (!points || points.length < 2 || endMs <= startMs) return 0;
+  let tot = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const t0 = points[i].timestamp * 1000;
+    const c0 = points[i].token_count || 0;
+    const t1 = points[i + 1].timestamp * 1000;
+    const c1 = points[i + 1].token_count || 0;
+    if (t1 <= startMs || t0 >= endMs) continue;
+    const ovStart = Math.max(t0, startMs);
+    const ovEnd = Math.min(t1, endMs);
+    const frac = t1 > t0 ? (ovEnd - ovStart) / (t1 - t0) : 1;
+    if (c1 >= c0) tot += (c1 - c0) * frac;
+    else if (c1 > 0) tot += c1 * frac;
   }
-  return v;
+  return Math.round(tot);
 }
 function analyzeSeries(points) {
   if (!points.length) return null;
@@ -101,10 +111,9 @@ function analyzeSeries(points) {
   for (const pt of points) if (pt.token_count > 0) lastActiveTs = pt.timestamp;
   // pace over trailing hour (or longest available span up to 1h)
   const nowMs = last.timestamp * 1000;
-  const hourAgoValue = valueAt(points, nowMs - 3600_000);
   let pacePerHour = null;
-  if (hourAgoValue !== null && nowMs - 3600_000 >= points[0].timestamp * 1000) {
-    pacePerHour = Math.round((last.token_count - hourAgoValue));
+  if (nowMs - 3600_000 >= points[0].timestamp * 1000) {
+    pacePerHour = monotonicDeltaBetween(points, nowMs - 3600_000, nowMs);
   } else if (points.length > 1) {
     const spanH = (last.timestamp - points[0].timestamp) / 3600;
     if (spanH > 0.05) pacePerHour = Math.round((last.token_count - points[0].token_count) / spanH);
@@ -125,6 +134,8 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
   let best = null;      // current run (latest tokens > 0)
   let bestHist = null;  // run with highest historical max (for "last run" when out)
   const runMiners = {}; // run_id -> num_miners (run-wide, from any miner's response)
+  let totalTodayTokens = 0;
+  const nowMs = Date.now();
   for (const run of runs) {
     let resp;
     try {
@@ -134,6 +145,7 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
     }
     if (resp.num_miners != null) runMiners[run.run_id] = resp.num_miners;
     const pts = (resp.data_points || []).slice().sort((a, b) => a.timestamp - b.timestamp);
+    totalTodayTokens += monotonicDeltaBetween(pts, boundaryMs, nowMs);
     const a = analyzeSeries(pts);
     if (!a) continue;
     const rec = { run, a, rank: resp.rank ?? null, numMiners: resp.num_miners ?? null, points: pts };
@@ -146,9 +158,7 @@ async function analyzeMiner(hotkey, runs, boundaryMs) {
   const chosen = best || bestHist;
   if (!chosen) return { status: 'unknown', runMiners };
   const { run, a } = chosen;
-  const boundaryVal = valueAt(chosen.points, boundaryMs);
-  const todayTokens = a.latestTokens > 0 && boundaryVal !== null
-    ? Math.max(0, a.latestTokens - boundaryVal) : 0;
+  const todayTokens = totalTodayTokens;
   let status;
   if (!best) status = 'out';                       // no run with tokens > 0
   else if (a.flatSec !== null && a.flatSec > 1800) status = 'stalled'; // in run, flat > 30 min

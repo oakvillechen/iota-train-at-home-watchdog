@@ -49,7 +49,7 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.7.2"
+APP_VERSION = "1.7.3"
 from watchdog_config import LOG_DIR, CONFIG_FILE, DEFAULT_CONFIG, load_config, save_config
 TOKEN_CACHE_FILE = os.path.join(LOG_DIR, "token_history_cache.json")
 APP_NAME = "IOTA Train at Home"
@@ -3060,8 +3060,19 @@ class IotaWatchdogApp:
             tk.Label(row_pwd, text="解密密码:", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
             ent_pwd = tk.Entry(row_pwd, width=16, font=("Helvetica", 11), show="*", bg=entry_bg, fg=entry_fg, bd=1, relief="solid")
             ent_pwd.insert(0, self.config.get("cloud_encrypt_password", ""))
-            ent_pwd.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
-            tk.Label(row_pwd, text="(网页端解锁用，至少 8 位，各机器需一致)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
+            ent_pwd.pack(side=tk.LEFT, padx=(8, 4), ipady=2)
+
+            def _toggle_pwd_visibility():
+                if ent_pwd.cget("show") == "*":
+                    ent_pwd.config(show="")
+                    btn_view_pwd.config(text="🙈 隐藏")
+                else:
+                    ent_pwd.config(show="*")
+                    btn_view_pwd.config(text="👁️ 显示")
+
+            btn_view_pwd = tk.Button(row_pwd, text="👁️ 显示", font=("Helvetica", 10), command=_toggle_pwd_visibility, bg=entry_bg, fg=fg_main, relief="flat", bd=1)
+            btn_view_pwd.pack(side=tk.LEFT, padx=(0, 8))
+            tk.Label(row_pwd, text="(至少 8 位，各机器一致)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
             _enable_clipboard(ent_pwd)
 
             lbl_msg = tk.Label(container, text=f"状态: {getattr(self, 'last_cloud_sync_msg', '待就绪')}", font=("Helvetica", 11, "bold"), bg=bg_main, fg="#0ea5e9", wraplength=480, justify="left")

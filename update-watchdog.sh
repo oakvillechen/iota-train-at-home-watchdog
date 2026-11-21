@@ -19,8 +19,11 @@ mkdir -p "$BASE_DIR" "$VERSIONS_DIR" "$CACHE_DIR"
 
 echo "🔍 正在检查 GitHub 最新版本..."
 
-# 探测 GitHub Token (提高 API 限额或私有访问)
+# 探测 GitHub Token (提高 API 限额或私有访问)，优先读取 macOS 钥匙串
 TOKEN="${GITHUB_TOKEN:-}"
+if [ -z "$TOKEN" ]; then
+    TOKEN=$(security find-generic-password -a github_token -s "IOTA Watchdog GitHub Token" -w 2>/dev/null || true)
+fi
 if [ -z "$TOKEN" ] && [ -f "$HOME/Library/Logs/IOTA Train at Home/.github_token" ]; then
     TOKEN=$(cat "$HOME/Library/Logs/IOTA Train at Home/.github_token" | tr -d ' \n\r')
 fi
@@ -28,13 +31,14 @@ if [ -z "$TOKEN" ] && [ -f "$HOME/Library/Logs/IOTA Train at Home/watchdog_confi
     TOKEN=$(grep -o '"github_token": *"[^"]*"' "$HOME/Library/Logs/IOTA Train at Home/watchdog_config.json" | head -n 1 | sed -E 's/.*"github_token": *"([^"]*)".*/\1/')
 fi
 
-AUTH_HEADER=""
-if [ -n "$TOKEN" ]; then
-    AUTH_HEADER="-H \"Authorization: Bearer $TOKEN\""
-fi
-
 TAG_NAME=""
-RELEASE_JSON=$(eval curl -s $AUTH_HEADER "https://api.github.com/repos/$REPO/releases/latest" || true)
+API_URL="https://api.github.com/repos/$REPO/releases/latest"
+if [ -n "$TOKEN" ]; then
+    # 通过 stdin 传递认证头：既不经过 eval，也不会让 Token 出现在 ps 可见的参数里
+    RELEASE_JSON=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -s -K - "$API_URL" || true)
+else
+    RELEASE_JSON=$(curl -s "$API_URL" || true)
+fi
 
 if echo "$RELEASE_JSON" | grep -q '"tag_name":'; then
     TAG_NAME=$(echo "$RELEASE_JSON" | grep -m 1 '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
@@ -105,7 +109,9 @@ if [ -n "$SHA_URL" ]; then
     fi
     echo "✅ SHA256 校验通过。"
 else
-    echo "⚠️ Release 中未附带 .sha256 签名，跳过校验。"
+    echo "❌ Release 中未附带 .sha256 校验文件，拒绝安装未经校验的构建包。"
+    rm -f "$ZIP_FILE"
+    exit 1
 fi
 
 # 解压到 versions/<VERSION>/
@@ -161,7 +167,7 @@ SYS_APP="/Applications/IOTA Watchdog.app"
 if [ -w "$SYS_APP" ] || [ -w "/Applications" ]; then
     echo "🔄 同步更新 $SYS_APP ..."
     rm -rf "$SYS_APP"
-    cp -R "$TARGET_VER_DIR/IOTA Watchdog.app" "$SYS_APP"
+    ditto "$TARGET_VER_DIR/IOTA Watchdog.app" "$SYS_APP"
 fi
 
 echo "============================================="
@@ -171,7 +177,10 @@ echo "🚀 启动入口: $BASE_DIR/launcher.sh"
 echo "============================================="
 
 # 关闭旧进程并拉起新版
-pkill -f "IOTA Watchdog" 2>/dev/null || true
+WATCHDOG_PIDS=$(ps -axo pid=,comm= | awk '/IOTA Watchdog\.app\/Contents\/MacOS\/IOTA Watchdog$/ {print $1}')
+if [ -n "$WATCHDOG_PIDS" ]; then
+    kill $WATCHDOG_PIDS 2>/dev/null || true
+fi
 sleep 1
 if [ -d "$SYS_APP" ]; then
     open -n "$SYS_APP"

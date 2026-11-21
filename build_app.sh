@@ -34,9 +34,17 @@ echo "Packaging IOTA Watchdog.app with $PY_BIN..."
     --add-data "iota_cluster_sync.py:." \
     --add-data "updater.py:." \
     --add-data "theme.py:." \
+    --add-data "net_ssl.py:." \
+    --add-data "secret_store.py:." \
+    --add-data "iota_process.py:." \
+    --add-data "watchdog_config.py:." \
     --hidden-import iota_cluster_sync \
     --hidden-import theme \
     --hidden-import updater \
+    --hidden-import net_ssl \
+    --hidden-import secret_store \
+    --hidden-import iota_process \
+    --hidden-import watchdog_config \
     --hidden-import urllib.request \
     --hidden-import urllib.error \
     --hidden-import ssl \
@@ -45,8 +53,8 @@ echo "Packaging IOTA Watchdog.app with $PY_BIN..."
 # 3. 注入 version.txt 及支持模块到 .app Bundle 目录
 mkdir -p "dist/IOTA Watchdog.app/Contents/Resources"
 mkdir -p "dist/IOTA Watchdog.app/Contents/MacOS"
-cp version.txt iota_cluster_sync.py updater.py theme.py "dist/IOTA Watchdog.app/Contents/Resources/"
-cp version.txt iota_cluster_sync.py updater.py theme.py "dist/IOTA Watchdog.app/Contents/MacOS/"
+cp version.txt iota_cluster_sync.py updater.py theme.py net_ssl.py secret_store.py iota_process.py watchdog_config.py "dist/IOTA Watchdog.app/Contents/Resources/"
+cp version.txt iota_cluster_sync.py updater.py theme.py net_ssl.py secret_store.py iota_process.py watchdog_config.py "dist/IOTA Watchdog.app/Contents/MacOS/"
 
 # 4. 创建 Zip bundle 与 SHA256 校验和
 echo "Creating Zip bundle & SHA256 checksum..."

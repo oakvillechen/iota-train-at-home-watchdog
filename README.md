@@ -25,7 +25,7 @@
 
 ### Option A: macOS App (Recommended)
 
-Download the latest `IOTA-Watchdog-macOS.zip`, unzip, and double-click **IOTA Watchdog.app**.
+Download `IOTA-Watchdog-macOS.zip` from the [latest Release](https://github.com/oakvillechen/iota-train-at-home-watchdog/releases/latest), unzip, and double-click **IOTA Watchdog.app**. Built zips are published only as Release assets (tagging `vX.Y.Z` triggers the build); they are no longer committed to the repository.
 
 > **Note**: On first launch macOS may show a Gatekeeper warning. Right-click → Open to bypass.
 
@@ -63,9 +63,19 @@ All settings are saved in `watchdog_config.json` and editable from the GUI:
 | `max_stale_minutes` | 10 | Minutes without log output before declaring the process frozen |
 | `cooldown_minutes` | 3 | Minutes of restart protection cooldown after a restart |
 | `log_retention_days` | 2 | Days to keep old log files before auto-deletion |
+| `netlog_retention_days` | 0 | Days to keep the IOTA client's large `*-netlog.log` files (0 = keep only today's) |
 | `check_interval_seconds` | 15 | How often (seconds) to check process status |
 | `caffeinate_enabled` | true | Keep macOS awake while running |
 | `log_font_size` | 12 | Log viewer font size (adjustable via A+/A- buttons) |
+| `telemetry_branch` | `telemetry` | Branch that holds cluster telemetry (`data/*.json`) |
+
+The GitHub token for cluster sync is stored in the macOS Keychain (service `IOTA Watchdog GitHub Token`), not in `watchdog_config.json`; tokens from older versions are migrated automatically. Use a fine-grained PAT limited to this repository with **Contents: Read and write** and an expiry date.
+
+### Cluster telemetry & encryption
+
+- Each node writes `data/node-<hash>.json` to the `telemetry` branch. Every update replaces the branch with a single parentless snapshot commit, so telemetry no longer adds commits to `main`.
+- Encrypted packets use AES-256-CBC with PBKDF2-SHA256 (100k iterations) plus an HMAC-SHA256 integrity tag (`v: 2`). The dashboard verifies the tag before decrypting.
+- An encryption password of at least 8 characters is required (the old public default is rejected). Use the same password on every machine and in the dashboard.
 
 ---
 
@@ -78,6 +88,12 @@ All settings are saved in `watchdog_config.json` and editable from the GUI:
 | `start_watchdog.command` | Double-clickable macOS launcher script |
 | `clean_iota_tah.command` | Deep cleanup script preserving watchdog tools |
 | `build_app.sh` | Build script to package as macOS .app via PyInstaller |
+| `iota_cluster_sync.py` | Encrypts node status and publishes it to the `telemetry` branch |
+| `updater.py` | Release-based self-updater (SHA256 verified) |
+| `net_ssl.py` | Certificate-verifying HTTPS context (system + Keychain CAs, works behind corporate proxies) |
+| `secret_store.py` | macOS Keychain storage for the GitHub token |
+| `iota_process.py` | Finds/stops IOTA processes by executable path (no name-based `pkill`) |
+| `watchdog_config.py` | Config load/save and token migration |
 | `AppIcon.icns` | macOS app icon |
 
 ---
@@ -91,6 +107,8 @@ All settings are saved in `watchdog_config.json` and editable from the GUI:
 Requires Python 3.8+ and PyInstaller (`pip3 install pyinstaller`).
 
 Output: `dist/IOTA Watchdog.app` and `IOTA-Watchdog-macOS.zip`.
+
+To publish a release, bump `version.txt`/`APP_VERSION` and push a `vX.Y.Z` tag; the `Build macOS app` workflow attaches the zip and `.sha256` to the Release that the in-app updater reads.
 
 ---
 

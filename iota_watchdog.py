@@ -7,6 +7,9 @@ import subprocess
 import re
 from datetime import datetime
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import iota_process
+
 # ==================== 配置项 ====================
 LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
 APP_NAME = "IOTA Train at Home"
@@ -28,19 +31,13 @@ def get_latest_cli_log():
     return files[0]
 
 def is_app_running():
-    try:
-        out = subprocess.check_output(["pgrep", "-f", "IOTA Train at Home"]).decode().strip()
-        return bool(out)
-    except subprocess.CalledProcessError:
-        return False
+    return iota_process.is_running()
 
 def restart_iota():
     log("⚠️ 触发强制重启 IOTA Train at Home...")
-    
-    # 强制杀死相关进程
-    subprocess.run(["pkill", "-9", "-f", "IOTA Train at Home"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-9", "-f", "main_pool"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-9", "-f", "iota-cli"], stderr=subprocess.DEVNULL)
+
+    # 先正常终止，超时后强制结束相关进程
+    iota_process.stop_iota()
     
     time.sleep(3)
     

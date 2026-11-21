@@ -23,10 +23,10 @@ import webbrowser
 import ssl
 from datetime import datetime, timedelta
 
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except Exception:
-    pass
+import net_ssl
+import iota_process
+
+net_ssl.install_default()
 
 try:
     import iota_cluster_sync
@@ -49,41 +49,13 @@ except ModuleNotFoundError:
             os.execv(alt_py, [alt_py] + sys.argv)
     raise
 
-APP_VERSION = "1.7.1"
-LOG_DIR = os.path.expanduser("~/Library/Logs/IOTA Train at Home")
-CONFIG_FILE = os.path.join(LOG_DIR, "watchdog_config.json")
+APP_VERSION = "1.7.2"
+from watchdog_config import LOG_DIR, CONFIG_FILE, DEFAULT_CONFIG, load_config, save_config
 TOKEN_CACHE_FILE = os.path.join(LOG_DIR, "token_history_cache.json")
 APP_NAME = "IOTA Train at Home"
 SYS_APP_PATH = "/Applications/IOTA Train at Home.app"
 USER_APP_PATH = os.path.expanduser("~/Applications/IOTA Train at Home.app")
 
-DEFAULT_CONFIG = {
-    "max_stale_minutes": 10,
-    "cooldown_minutes": 3,
-    "check_interval_seconds": 15,
-    "auto_watchdog_enabled": True,
-    "filter_key_logs_only": True,
-    "auto_scroll": True,
-    "dark_mode": False,
-    "ui_theme": "light",
-    "ui_font_scale": 85,
-    "auto_check_update": True,
-    "skipped_version": "",
-    "caffeinate_enabled": True,
-    "log_font_size": 12,
-    "log_retention_days": 2,
-    "zombie_stale_hours": 2,
-    "restart_timestamps": [],
-    "last_upload_speed": "",
-    "last_download_speed": "",
-    "cloud_sync_enabled": False,
-    "github_token": "",
-    "github_repo": "oakvillechen/iota-train-at-home-watchdog",
-    "github_branch": "main",
-    "worker_id": "",
-    "worker_name": "",
-    "cloud_sync_interval_seconds": 60
-}
 
 # 忽略的高频底层网络心跳日志（避免刷屏）
 IGNORED_PATTERNS = [
@@ -143,23 +115,6 @@ except Exception:
             "log_bg": "#03060F", "log_fg": "#00F2FE"
         }
     }
-
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                return {**DEFAULT_CONFIG, **cfg}
-        except Exception:
-            pass
-    return DEFAULT_CONFIG.copy()
-
-def save_config(cfg):
-    try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving config: {e}")
 
 def format_size(size_bytes):
     """将字节数格式化为人类可读的字符串"""
@@ -898,7 +853,7 @@ class IotaWatchdogApp:
         import urllib.request, gzip, ssl
 
         try:
-            ctx = ssl._create_unverified_context()
+            ctx = net_ssl.default_context()
         except Exception:
             ctx = None
 
@@ -1515,6 +1470,9 @@ class IotaWatchdogApp:
         try:
             retention_days = self.config.get("log_retention_days", 2)
             cutoff_time = time.time() - (retention_days * 86400)
+            # IOTA 客户端的 *-netlog.log 每天可达数百 MB，单独使用更短的保留期
+            netlog_days = self.config.get("netlog_retention_days", 0)
+            netlog_cutoff = time.time() - (netlog_days * 86400)
             today_str = datetime.now().strftime("%Y-%m-%d")
 
             all_logs = glob.glob(os.path.join(LOG_DIR, "*.log"))
@@ -1529,7 +1487,8 @@ class IotaWatchdogApp:
                 try:
                     mtime = os.path.getmtime(log_path)
                     fsize = os.path.getsize(log_path)
-                    if mtime < cutoff_time:
+                    limit = netlog_cutoff if "netlog" in basename else cutoff_time
+                    if mtime < limit:
                         os.remove(log_path)
                         deleted_count += 1
                         freed_bytes += fsize
@@ -1797,9 +1756,7 @@ class IotaWatchdogApp:
         try:
             # 1. 停止进程
             self.append_watchdog_log("🛑 正在终止所有 IOTA 相关进程...")
-            subprocess.run(["pkill", "-9", "-f", "IOTA Train at Home"], stderr=subprocess.DEVNULL)
-            subprocess.run(["pkill", "-9", "-f", "main_pool"], stderr=subprocess.DEVNULL)
-            subprocess.run(["pkill", "-9", "-f", "iota-cli"], stderr=subprocess.DEVNULL)
+            iota_process.stop_iota()
             time.sleep(1.5)
 
             # 2. 清理 Application Support / Caches / Preferences / State
@@ -1898,9 +1855,7 @@ class IotaWatchdogApp:
         self.root.after(0, lambda: self.btn_restart.config(text="⏳ 正在杀死旧进程..."))
 
         try:
-            subprocess.run(["pkill", "-9", "-f", "IOTA Train at Home"], stderr=subprocess.DEVNULL)
-            subprocess.run(["pkill", "-9", "-f", "main_pool"], stderr=subprocess.DEVNULL)
-            subprocess.run(["pkill", "-9", "-f", "iota-cli"], stderr=subprocess.DEVNULL)
+            iota_process.stop_iota()
             
             time.sleep(2)
             self.root.after(0, lambda: self.btn_restart.config(text="🚀 正在重新拉起应用..."))
@@ -2979,8 +2934,10 @@ class IotaWatchdogApp:
                             if first_sync:
                                 self.append_watchdog_log(f"🌐 [云端监控] 状态已成功上报: {msg}")
                                 first_sync = False
-                        else:
+                        elif msg != getattr(self, "_last_cloud_sync_error", None):
+                            # 同一错误只记录一次，避免每轮上报刷屏
                             self.append_watchdog_log(f"⚠️ [云端同步失败] {msg}")
+                        self._last_cloud_sync_error = None if ok else msg
             except Exception as e:
                 self.last_cloud_sync_msg = str(e)
                 self.append_watchdog_log(f"⚠️ [云端同步异常] {e}")
@@ -3101,10 +3058,10 @@ class IotaWatchdogApp:
             row_pwd = tk.Frame(fields, bg=bg_main)
             row_pwd.pack(fill=tk.X, pady=(2, 8))
             tk.Label(row_pwd, text="解密密码:", font=("Helvetica", 10, "bold"), bg=bg_main, fg=fg_main).pack(side=tk.LEFT)
-            ent_pwd = tk.Entry(row_pwd, width=16, font=("Helvetica", 11), bg=entry_bg, fg=entry_fg, bd=1, relief="solid")
-            ent_pwd.insert(0, self.config.get("cloud_encrypt_password", "iota2026"))
+            ent_pwd = tk.Entry(row_pwd, width=16, font=("Helvetica", 11), show="*", bg=entry_bg, fg=entry_fg, bd=1, relief="solid")
+            ent_pwd.insert(0, self.config.get("cloud_encrypt_password", ""))
             ent_pwd.pack(side=tk.LEFT, padx=(8, 12), ipady=2)
-            tk.Label(row_pwd, text="(用于网页端解锁真实卡片，默认 iota2026)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
+            tk.Label(row_pwd, text="(网页端解锁用，至少 8 位，各机器需一致)", font=("Helvetica", 10), bg=bg_main, fg="#94a3b8").pack(side=tk.LEFT)
             _enable_clipboard(ent_pwd)
 
             lbl_msg = tk.Label(container, text=f"状态: {getattr(self, 'last_cloud_sync_msg', '待就绪')}", font=("Helvetica", 11, "bold"), bg=bg_main, fg="#0ea5e9", wraplength=480, justify="left")
@@ -3144,8 +3101,14 @@ class IotaWatchdogApp:
                     "worker_id": self.get_worker_identity(),
                     "miner_id": self.get_miner_id(),
                     "cloud_encrypt_enabled": enc_var.get(),
-                    "cloud_encrypt_password": ent_pwd.get().strip() or "iota2026"
+                    "cloud_encrypt_password": ent_pwd.get().strip()
                 }
+                if enc_var.get() and iota_cluster_sync is not None:
+                    pwd_err = iota_cluster_sync.password_problem(temp_cfg["cloud_encrypt_password"])
+                    if pwd_err:
+                        lbl_msg.config(text=f"❌ {pwd_err}", fg="#ef4444")
+                        btn_test.config(text="🚀 测试上报一次")
+                        return
                 payload = self.get_current_telemetry_payload()
 
                 def _async_worker():
@@ -3180,10 +3143,10 @@ class IotaWatchdogApp:
                             save_config(self.config)
                             self.last_cloud_sync_time = time.time()
                             self.last_cloud_sync_msg = res_msg
-                            self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 data/{temp_cfg['worker_id']}.json 并自动激活后台同步)")
+                            self.append_watchdog_log(f"✅ [云端测试] {res_msg} (已上传至 telemetry 分支并自动激活后台同步)")
                             dlg.after(0, lambda: [
                                 sync_var.set(True),
-                                lbl_msg.config(text=f"✅ 测试成功并已自动开启持续同步！\n数据已推送到 {temp_cfg['github_repo']}/data/{temp_cfg['worker_id']}.json", fg="#10b981"),
+                                lbl_msg.config(text=f"✅ 测试成功并已自动开启持续同步！\n数据已推送到 {temp_cfg['github_repo']} 的 telemetry 分支", fg="#10b981"),
                                 btn_test.config(text="🚀 测试上报一次")
                             ])
                         else:
@@ -3202,6 +3165,11 @@ class IotaWatchdogApp:
 
             def _do_save():
                 old_w_id = self.config.get("worker_id", "")
+                if enc_var.get() and sync_var.get() and iota_cluster_sync is not None:
+                    pwd_err = iota_cluster_sync.password_problem(ent_pwd.get())
+                    if pwd_err:
+                        lbl_msg.config(text=f"❌ {pwd_err}", fg="#ef4444")
+                        return
 
                 self.config["cloud_sync_enabled"] = sync_var.get()
                 new_w_name = ent_name.get().strip()
@@ -3210,7 +3178,7 @@ class IotaWatchdogApp:
                 self.config["worker_id"] = new_w_id
                 self.config["miner_id"] = self.get_miner_id()
                 self.config["cloud_encrypt_enabled"] = enc_var.get()
-                self.config["cloud_encrypt_password"] = ent_pwd.get().strip() or "iota2026"
+                self.config["cloud_encrypt_password"] = ent_pwd.get().strip()
 
                 t_input = ent_token.get().strip()
                 if t_input:
@@ -3237,16 +3205,15 @@ class IotaWatchdogApp:
                 dlg.destroy()
 
             def _open_dashboard():
+                # 不再把 Token 放进 URL (会留在浏览器历史中)；如需提高 API 限额，在看板设置中填写一次即可
                 local_dash = os.path.join(LOG_DIR, "dashboard", "index.html")
-                token = self.config.get("github_token", "").strip()
-                token_hash = f"#token={token}" if token else ""
                 if os.path.exists(local_dash):
-                    webbrowser.open(f"file://{local_dash}{token_hash}")
+                    webbrowser.open(f"file://{local_dash}")
                 else:
                     repo = ent_repo.get().strip() or "oakvillechen/iota-train-at-home-watchdog"
                     user = repo.split("/")[0] if "/" in repo else "oakvillechen"
                     repo_name = repo.split("/")[1] if "/" in repo else "iota-train-at-home-watchdog"
-                    webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/{token_hash}")
+                    webbrowser.open(f"https://{user}.github.io/{repo_name}/dashboard/")
 
             btn_open = ModernButton(btn_bar, text="🌐 打开监控看板", command=_open_dashboard, bg_color="#6366f1", fg_color="#ffffff", hover_bg="#4f46e5", font=("Helvetica", 10, "bold"), padx=10, pady=5)
             btn_open.pack(side=tk.LEFT)
@@ -3304,10 +3271,11 @@ class IotaWatchdogApp:
 
     def check_process(self):
         try:
-            out = subprocess.check_output(["pgrep", "-f", "IOTA Train at Home"]).decode().strip()
-            pids = out.splitlines()
-            return True, f"正常运行中 (PID: {pids[0]})"
-        except subprocess.CalledProcessError:
+            pids = iota_process.find_iota_pids()
+            if pids:
+                return True, f"正常运行中 (PID: {pids[0]})"
+            return False, "未运行"
+        except Exception:
             return False, "未运行"
 
     def log_stream_loop(self):

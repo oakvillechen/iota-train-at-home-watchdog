@@ -346,7 +346,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
-        <input type="password" id="quick-decrypt-pwd" placeholder="解密密码 (默认: iota2026)" class="w-full sm:w-48 bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3 py-2 text-[13px] text-[var(--ink)] font-mono focus:outline-none focus:border-[var(--indigo)]">
+        <input type="password" id="quick-decrypt-pwd" placeholder="解密密码" class="w-full sm:w-48 bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3 py-2 text-[13px] text-[var(--ink)] font-mono focus:outline-none focus:border-[var(--indigo)]">
         <button onclick="unlockWithQuickPassword()" class="px-4 py-2 rounded-xl bg-[var(--indigo)] hover:bg-[var(--indigo)]/90 text-white text-[13px] font-semibold shrink-0 transition">解锁查看</button>
       </div>
     </div>
@@ -445,8 +445,8 @@
 
         <div>
           <label class="block text-[var(--ink)] font-semibold mb-1">Git Branch / 分支</label>
-          <input type="text" id="cfg-branch" value="main" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
-          <p class="text-[12px] text-[var(--ink-3)] mt-1">存放 data/*.json 的分支，通常为 main</p>
+          <input type="text" id="cfg-branch" value="telemetry" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
+          <p class="text-[12px] text-[var(--ink-3)] mt-1">存放 data/*.json 的分支，默认 telemetry (只保留最新快照，不累积提交历史)</p>
         </div>
 
         <div>
@@ -456,8 +456,8 @@
         </div>
 
         <div>
-          <label class="block text-[var(--ink)] font-semibold mb-1">🔐 端到端 AES 解密密码 (默认: iota2026)</label>
-          <input type="password" id="cfg-password" placeholder="默认: iota2026" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
+          <label class="block text-[var(--ink)] font-semibold mb-1">🔐 端到端 AES 解密密码</label>
+          <input type="password" id="cfg-password" placeholder="与 Watchdog 中设置的加密密码一致" class="w-full bg-[var(--card-sub)] border border-[var(--border)] rounded-xl px-3.5 py-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--indigo)] font-mono">
           <p class="text-[12px] text-[var(--ink-3)] mt-1">若 Watchdog 启用了 AES-256 加密上传，需填入密码解密查看真实 Miner ID 与收益。</p>
         </div>
 
@@ -485,10 +485,10 @@
 
     let appConfig = {
       repo: "oakvillechen/iota-train-at-home-watchdog",
-      branch: "main",
+      branch: "telemetry",
       token: "",
       interval: 30,
-      password: "iota2026"
+      password: ""
     };
 
     let minersData = [];
@@ -644,6 +644,8 @@
         const saved = localStorage.getItem(CONFIG_KEY);
         if (saved) {
           appConfig = { ...appConfig, ...JSON.parse(saved) };
+          // 遥测数据已从 main 迁移到 telemetry 分支
+          if (!appConfig.branch || appConfig.branch === "main") appConfig.branch = "telemetry";
         }
         // 自动提取 URL Hash / Query 传入的 Token (如从 Watchdog 唤起的本地私有看板)
         const hashMatch = window.location.hash.match(/token=([^&]+)/);
@@ -658,10 +660,6 @@
         }
       } catch (e) {}
 
-      if (!appConfig.password) {
-        appConfig.password = "iota2026";
-      }
-
       document.getElementById("cfg-repo").value = appConfig.repo;
       document.getElementById("cfg-branch").value = appConfig.branch;
       document.getElementById("cfg-token").value = appConfig.token || "";
@@ -675,11 +673,11 @@
 
     function saveSettings() {
       appConfig.repo = document.getElementById("cfg-repo").value.trim() || "oakvillechen/iota-train-at-home-watchdog";
-      appConfig.branch = document.getElementById("cfg-branch").value.trim() || "main";
+      appConfig.branch = document.getElementById("cfg-branch").value.trim() || "telemetry";
       appConfig.token = document.getElementById("cfg-token").value.trim();
       appConfig.interval = parseInt(document.getElementById("cfg-interval").value, 10) || 30;
       const pwdEl = document.getElementById("cfg-password");
-      if (pwdEl) appConfig.password = pwdEl.value.trim() || "iota2026";
+      if (pwdEl) appConfig.password = pwdEl.value.trim();
 
       localStorage.setItem(CONFIG_KEY, JSON.stringify(appConfig));
       document.getElementById("target-repo-tag").innerText = `REPO: ${appConfig.repo}`;
@@ -743,26 +741,29 @@
         const iv = Uint8Array.from(atob(packet.iv), c => c.charCodeAt(0));
         const data = Uint8Array.from(atob(packet.data), c => c.charCodeAt(0));
 
-        const keyMaterial = await window.crypto.subtle.importKey(
-          "raw",
-          enc.encode(password),
-          { name: "PBKDF2" },
-          false,
-          ["deriveKey"]
-        );
-
-        const key = await window.crypto.subtle.deriveKey(
-          {
-            name: "PBKDF2",
-            salt: salt,
-            iterations: 100000,
-            hash: "SHA-256"
-          },
+        const subtle = window.crypto.subtle;
+        const keyMaterial = await subtle.importKey("raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]);
+        const rawKey = await subtle.deriveBits(
+          { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
           keyMaterial,
-          { name: "AES-CBC", length: 256 },
-          false,
-          ["decrypt"]
+          256
         );
+        const key = await subtle.importKey("raw", rawKey, { name: "AES-CBC" }, false, ["decrypt"]);
+
+        // v2 起附带 Encrypt-then-MAC：先校验 HMAC，防止密文被篡改
+        if ((packet.v || 1) >= 2 || packet.mac) {
+          if (!packet.mac) throw new Error("missing mac");
+          const kdfKey = await subtle.importKey("raw", rawKey, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+          const macKeyBytes = await subtle.sign("HMAC", kdfKey, enc.encode("iota-watchdog-mac-v2"));
+          const macKey = await subtle.importKey("raw", macKeyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+          const macBytes = Uint8Array.from(atob(packet.mac), c => c.charCodeAt(0));
+          const signed = new Uint8Array(salt.length + iv.length + data.length);
+          signed.set(salt, 0);
+          signed.set(iv, salt.length);
+          signed.set(data, salt.length + iv.length);
+          const valid = await subtle.verify("HMAC", macKey, macBytes, signed);
+          if (!valid) throw new Error("mac mismatch");
+        }
 
         const decrypted = await window.crypto.subtle.decrypt(
           { name: "AES-CBC", iv: iv },
@@ -902,18 +903,10 @@
         }
       }
 
-      // 端到端 AES-256 解密处理 (优先配置密码，其次回退 iota2026)
-      let pwd = (appConfig.password || "iota2026").trim();
+      // 端到端 AES-256 解密处理
+      let pwd = (appConfig.password || "").trim();
       let decryptPromises = nodes.map(n => decryptNodeData(n, pwd));
       let decryptedNodes = await Promise.all(decryptPromises);
-
-      if (decryptedNodes.some(n => n && n.__encrypted) && pwd !== "iota2026") {
-        const altPromises = nodes.map(n => decryptNodeData(n, "iota2026"));
-        const altNodes = await Promise.all(altPromises);
-        if (!altNodes.some(n => n && n.__encrypted)) {
-          decryptedNodes = altNodes;
-        }
-      }
 
       const hasEncryptedLock = decryptedNodes.some(n => n && n.__encrypted);
       const unlockBanner = document.getElementById("encryption-unlock-banner");
@@ -1492,7 +1485,7 @@
 <script>
 /* ============ LIVE 实时遥测：每 15 秒拉取 data/miners.json 并渲染 ============ */
 (function () {
-  var DATA_URL = 'https://raw.githubusercontent.com/oakvillechen/iota-train-at-home-watchdog/main/data/telemetry/miners.json';
+  var DATA_URL = 'https://raw.githubusercontent.com/oakvillechen/iota-train-at-home-watchdog/telemetry/data/telemetry/miners.json';
   var POLL_MS = 15000;
   var lastData = null;
 
@@ -1729,17 +1722,17 @@
       if (!r.ok && isLocalHost) {
         r = await fetch(DATA_URL + '?_t=' + Date.now());
       }
+      if (!r.ok) {
+        // telemetry 分支尚未生成时回退读取 main 上的旧数据
+        r = await fetch(DATA_URL.replace('/telemetry/data/', '/main/data/') + '?_t=' + Date.now());
+      }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var packet = await r.json();
 
       var pwd = '';
       try { pwd = (typeof appConfig !== 'undefined' && appConfig.password) ? appConfig.password : ''; } catch (e) { pwd = ''; }
-      if (!pwd) pwd = 'iota2026';
 
       var data = await decryptNodeData(packet, pwd);
-      if ((!data || data.__encrypted) && pwd !== 'iota2026') {
-        data = await decryptNodeData(packet, 'iota2026');
-      }
       if (!data || data.__encrypted || !data.machines) { showLocked(); return; }
       render(data);
       var dot = $('live-dot'); if (dot) dot.style.background = 'var(--green)';

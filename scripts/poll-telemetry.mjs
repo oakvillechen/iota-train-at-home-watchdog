@@ -4,8 +4,9 @@
  *
  * Reads the Macrocosmos public API for two miners, computes detailed status,
  * and writes data/miners.json encrypted with the SAME scheme the watchdog
- * page already uses: { v:1, alg:"AES-256-CBC", salt, iv, data } where
- * key = PBKDF2(password, salt, 100000, SHA-256, 32 bytes), AES-256-CBC.
+ * page already uses: { v:2, alg:"AES-256-CBC", salt, iv, data, mac } where
+ * key = PBKDF2(password, salt, 100000, SHA-256, 32 bytes), AES-256-CBC, and
+ * mac = HMAC-SHA256(HMAC-SHA256(key, "iota-watchdog-mac-v2"), salt||iv||data).
  *
  * Env:
  *   M3_HOTKEY, M1_HOTKEY        miner hotkeys (GitHub Secrets)
@@ -14,7 +15,7 @@
  *   OUTPUT_PATH                 default: data/miners.json
  *   PLAINTEXT=1                 write plaintext JSON instead (local testing only!)
  */
-import { pbkdf2Sync, randomBytes, createCipheriv } from 'node:crypto';
+import { pbkdf2Sync, randomBytes, createCipheriv, createHmac } from 'node:crypto';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -239,9 +240,12 @@ if (process.env.PLAINTEXT === '1') {
   const key = pbkdf2Sync(Buffer.from(unlockKey, 'utf8'), salt, 100000, 32, 'sha256');
   const cipher = createCipheriv('aes-256-cbc', key, iv);
   const ct = Buffer.concat([cipher.update(JSON.stringify(out), 'utf8'), cipher.final()]);
+  const macKey = createHmac('sha256', key).update('iota-watchdog-mac-v2').digest();
+  const mac = createHmac('sha256', macKey).update(Buffer.concat([salt, iv, ct])).digest();
   const packet = {
-    v: 1, alg: 'AES-256-CBC',
+    v: 2, alg: 'AES-256-CBC',
     salt: salt.toString('base64'), iv: iv.toString('base64'), data: ct.toString('base64'),
+    mac: mac.toString('base64'),
   };
   writeFileSync(outPath, JSON.stringify(packet));
   console.log('Wrote encrypted packet:', outPath);

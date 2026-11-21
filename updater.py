@@ -17,7 +17,8 @@ import subprocess
 from typing import Optional, Tuple, Callable, Dict, Any
 
 try:
-    ssl._create_default_https_context = ssl._create_unverified_context
+    import net_ssl
+    net_ssl.install_default()
 except Exception:
     pass
 
@@ -229,10 +230,10 @@ def download_file_with_progress(
         raise e
 
 def verify_file_sha256(file_path: str, sha_url: Optional[str]) -> bool:
-    """下载并校验 SHA256 完整性"""
+    """下载并校验 SHA256 完整性；缺少校验文件或获取失败时一律视为校验失败"""
     if not sha_url:
-        # Release 中未包含 sha256 校验文件时跳过校验
-        return True
+        print("SHA256 checksum URL missing; refusing to install unverified update")
+        return False
 
     try:
         req = urllib.request.Request(sha_url, headers={"User-Agent": "IOTA-Watchdog-Updater"})
@@ -241,8 +242,12 @@ def verify_file_sha256(file_path: str, sha_url: Optional[str]) -> bool:
             # 格式通常为: "<hash>  IOTA-Watchdog-macOS.zip"
             expected_hash = content.split()[0].lower()
     except Exception as e:
-        print(f"Warning: Failed to fetch sha256 from {sha_url}: {e}")
-        return True
+        print(f"Failed to fetch sha256 from {sha_url}: {e}")
+        return False
+
+    if len(expected_hash) != 64:
+        print(f"Malformed sha256 file content from {sha_url}")
+        return False
 
     hasher = hashlib.sha256()
     with open(file_path, "rb") as f:

@@ -7,9 +7,21 @@ echo "=================================================="
 echo "🛑 Stopping IOTA Train at Home & miner processes..."
 echo "=================================================="
 
-pkill -9 -f "IOTA Train at Home" 2>/dev/null
-pkill -9 -f "main_pool" 2>/dev/null
-pkill -9 -f "iota-cli" 2>/dev/null
+# 按可执行文件路径精确匹配，避免误杀命令行中恰好包含 "IOTA Train at Home" 的其他进程
+iota_pids() {
+    ps -axo pid=,comm= | awk '/\/Applications\/IOTA Train at Home\.app\/|^ *[0-9]+ main_pool:ai\.macrocosmos\.iota/ {print $1}'
+}
+
+PIDS=$(iota_pids)
+if [ -n "$PIDS" ]; then
+    kill -TERM $PIDS 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [ -z "$(iota_pids)" ] && break
+        sleep 0.5
+    done
+    PIDS=$(iota_pids)
+    [ -n "$PIDS" ] && kill -KILL $PIDS 2>/dev/null
+fi
 
 sleep 1
 

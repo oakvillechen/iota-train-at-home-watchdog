@@ -63,49 +63,17 @@ def get_secret_value(env_key, config_key, local_cfg, filename=None, default=""):
 
 
 def upload_telemetry_to_github(repo, branch, token, json_bytes):
-    """通过 GitHub Contents API 即时 PUT data/telemetry/miners.json"""
-    api_url = f"https://api.github.com/repos/{repo}/contents/data/telemetry/miners.json"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "IOTA-Telemetry-Poller/1.0",
-    }
+    """将 data/telemetry/miners.json 写入 telemetry 分支的快照提交 (不累积历史)"""
+    import iota_cluster_sync
 
-    # 获取当前文件的 sha
-    sha = None
-    try:
-        req = urllib.request.Request(f"{api_url}?ref={branch}&_t={int(time.time()*1000)}", headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            sha = data.get("sha")
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            sha = None
-        else:
-            logger.warning(f"获取旧 SHA 失败 (HTTP {e.code})")
-    except Exception as e:
-        logger.warning(f"网络探测失败: {e}")
-
-    content_b64 = base64.b64encode(json_bytes).decode("ascii")
-    now_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
-    body = {
-        "message": f"telemetry: update miners.json [{now_str}] (local daemon)",
-        "content": content_b64,
-        "branch": branch,
-    }
-    if sha:
-        body["sha"] = sha
-
-    req = urllib.request.Request(
-        api_url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={**headers, "Content-Type": "application/json"},
-        method="PUT",
+    ok, msg = iota_cluster_sync.write_snapshot(
+        token, repo, branch,
+        {"data/telemetry/miners.json": json_bytes.decode("utf-8")},
+        "telemetry: snapshot miners.json (local daemon)",
     )
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        return resp.status in (200, 201)
+    if not ok:
+        logger.error(f"GitHub 上传失败: {msg}")
+    return ok
 
 
 def poll_and_sync(repo, branch, token, m3_hotkey, m1_hotkey, password, repo_dir):
@@ -151,7 +119,7 @@ def poll_and_sync(repo, branch, token, m3_hotkey, m1_hotkey, password, repo_dir)
                 content_bytes = f.read()
             ok = upload_telemetry_to_github(repo, branch, token, content_bytes)
             if ok:
-                logger.info("已通过 GitHub REST API 成功即时同步 data/telemetry/miners.json (0秒延迟)")
+                logger.info("已同步 data/telemetry/miners.json 至 telemetry 分支")
                 return True
             else:
                 logger.error("GitHub REST API 上传失败")
@@ -170,12 +138,24 @@ def main():
     args = parser.parse_args()
 
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, repo_dir)
+    import net_ssl
+    net_ssl.install_default()
     local_cfg = load_local_config()
 
     token = get_secret_value("GITHUB_TOKEN", "github_token", local_cfg, filename=".github_token")
+    if not token:
+        try:
+            import secret_store
+            token = secret_store.get_token()
+        except Exception:
+            token = ""
     repo = local_cfg.get("github_repo", DEFAULT_REPO).strip()
-    branch = local_cfg.get("github_branch", "main").strip()
-    pwd = get_secret_value("TELEMETRY_PASSWORD", "cloud_encrypt_password", local_cfg, default="iota2026")
+    branch = local_cfg.get("telemetry_branch", "telemetry").strip()
+    pwd = get_secret_value("TELEMETRY_PASSWORD", "cloud_encrypt_password", local_cfg)
+    if not pwd:
+        logger.error("未配置加密密码 (TELEMETRY_PASSWORD 或 watchdog 配置中的 cloud_encrypt_password)")
+        sys.exit(1)
 
     m1_hk = get_secret_value("M1_HOTKEY", "miner_id", local_cfg, filename=".m1_hotkey")
     m3_hk = get_secret_value("M3_HOTKEY", "m3_hotkey", local_cfg, filename=".m3_hotkey")

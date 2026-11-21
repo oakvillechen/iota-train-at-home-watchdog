@@ -37,20 +37,9 @@ jobs:
       - name: Poll official API and write encrypted telemetry
         run: node scripts/poll-telemetry.mjs
 
-      - name: Commit telemetry data
+      - name: Publish telemetry snapshot (telemetry branch, no history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -f scripts/telemetry.config.json
-          cp data/telemetry/miners.json /tmp/miners.json
-          git config user.name 'telemetry-bot'
-          git config user.email 'telemetry-bot@users.noreply.github.com'
-          for i in 1 2 3 4 5; do
-            git fetch origin main
-            git checkout -B main origin/main
-            cp /tmp/miners.json data/telemetry/miners.json
-            git add data/telemetry/miners.json
-            git diff --cached --quiet && exit 0
-            git commit -m 'telemetry: update miners.json'
-            git push origin main && exit 0
-            sleep 5
-          done
-          exit 1
+          python3 iota_cluster_sync.py publish data/telemetry/miners.json data/telemetry/miners.json

@@ -6,6 +6,10 @@ build/
 dist/
 *.spec
 
+# Build output is published as GitHub Release assets, not committed
+IOTA-Watchdog-macOS.zip
+IOTA-Watchdog-macOS.zip.sha256
+
 # Credentials & secrets
 .env*
 *.key
